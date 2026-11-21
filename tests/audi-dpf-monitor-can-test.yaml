@@ -1,0 +1,1558 @@
+substitutions:
+  # Nazwa urządzenia w ESPHome oraz nazwa widoczna w Home Assistant.
+  device_name: audi-dpf-ui-test
+  friendly_name: VAG DPF Monitor
+  # Zachowany na czas projektowania UI; będzie użyty ponownie po włączeniu CAN.
+  data_stale_timeout_ms: "15000"
+  # GPIO46 wygasiło ekran; przywrócono sprawdzone połączenie GPIO9.
+  display_cs_pin: GPIO9
+  # Set false only for USB bench diagnostics; normal vehicle firmware uses true.
+  can_bus_enabled: "true"
+  # Rozmiary czcionek UI w pikselach. Czcionka nawigacji ma osobną wartość,
+  # aby można ją było powiększyć bez zmiany tekstów na pozostałych ekranach.
+  ui_font_small: "18"
+  ui_font_nav: "20"
+  ui_font_label: "22"
+  ui_font_value: "38"
+  ui_font_hero: "48"
+
+# Wybrany profil jest zapamiętywany, ale jego wybór nie włącza niezweryfikowanych DID-ów.
+globals:
+  - id: ecu_profile_selection
+    type: int
+    restore_value: yes
+    initial_value: '0'  # 0 = Auto / standard OBD-II, 1 = kandydat CJCD.
+  # Tryb demonstracyjny zawsze uruchamia się jako wyłączony po restarcie,
+  # żeby przykładowe dane nigdy nie zostały pomylone z odczytami z samochodu.
+  - id: demo_mode
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: demo_start_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+# Local components: FT3168 touchscreen and TWAI CAN driver with bus recovery.
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [ft3168, esp32_can_recover]
+
+# Read-only OBD-II over the external SN65HVD230 transceiver.
+# Mode 01/09 requests only read vehicle data; vehicle-specific UDS DIDs remain disabled.
+canbus:
+  - platform: esp32_can_recover
+    id: obd_can
+    enabled: ${can_bus_enabled}
+    # GPIO1 w prespecie ekranu jest wyjściem zasilania AMOLED; CAN używa
+    # wolnych pinów GPIO5/6 wyprowadzonych na listwę. Nie wkładaj karty TF:
+    # te piny są też doprowadzone do nieużywanego gniazda karty SD.
+    tx_pin: GPIO5
+    rx_pin: GPIO6
+    can_id: 0x7E0
+    bit_rate: 500kbps
+    mode: NORMAL
+    rx_queue_len: 16
+    # OBD wysyła pojedyncze żądania sekwencyjnie. Jedno miejsce wystarcza
+    # i nie pozwala gromadzić nieaktualnych żądań przy braku odpowiedzi.
+    tx_queue_len: 1
+    on_frame:
+      # Odbieraj ruch magistrali tylko do wykrycia aktywnego auta; żądania OBD
+      # ruszają po wykryciu ramek i pauzują po 2 s ciszy. Dane ECU bierzemy z 0x7E8.
+      - can_id: 0
+        can_id_mask: 0
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if (!id(demo_mode) && ${can_bus_enabled}) {
+                uds_manager.notify_can_activity();
+                if (can_id == 0x7E8) uds_manager.handle_rx(x);
+              }
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  includes:
+    - ../uds_audi.h
+  on_boot:
+    then:
+      - lambda: |-
+          uds_manager.configure(
+            id(obd_can),  // Standardowe zapytania OBD-II; niezweryfikowane DID-y UDS są wyłączone.
+            id(soot_calculated),
+            id(soot_measured),
+            id(distance_since_regen),
+            id(temp_before_turbo),
+            id(temp_before_dpf),
+            id(dpf_regen),
+            id(obd_engine_rpm),
+            id(obd_coolant_temperature),
+            id(obd_dpf_delta_pressure),
+            id(obd_dpf_inlet_temperature),
+            id(obd_intake_manifold_pressure),
+            id(obd_barometric_pressure),
+            id(obd_estimated_boost_pressure),
+            id(obd_ecu_name),
+            id(obd_calibration_ids),
+            0x7E0,
+            ${data_stale_timeout_ms}
+          );
+          // Profil można wybrać offline. CJCD pozostaje kandydatem dopóki mapa DID nie zostanie zweryfikowana.
+          if (id(ecu_profile_selection) != 1) id(ecu_profile_selection) = 0;
+          id(ecu_profile_selection_text).publish_state(
+            id(ecu_profile_selection) == 1 ? "CJCD / 03L906018SJ (KANDYDAT)" : "AUTO / STANDARD OBD-II");
+          // Publikuj stan początkowy jako nieznany; nie traktuj go jako braku regeneracji.
+          id(dpf_regen_status_text).publish_state("unavailable");
+          id(dpf_regen_source_text).publish_state("unavailable");
+          id(obd_dpf_regen_pid_support_text).publish_state("unknown");
+          id(demo_mode) = false;
+
+# Płytka: ESP32-S3 z 16 MB Flash i 8 MB PSRAM.
+esp32:
+  board: esp32-s3-devkitc1-n16r8
+  # Waveshare ESP32-S3-Touch-AMOLED-1.64 has 16 MB Flash; do not rely on
+  # ESPHome's generic 4 MB default for this board definition.
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+# Logi diagnostyczne są widoczne w ESPHome podczas uruchomienia.
+logger:
+
+# Magistrala Quad SPI dla wyświetlacza AMOLED.
+spi:
+  - id: display_spi
+    type: quad
+    clk_pin: GPIO10
+    data_pins: [GPIO11, GPIO12, GPIO13, GPIO14]
+
+# Magistrala I2C dla kontrolera dotyku FT3168.
+i2c:
+  sda: GPIO47
+  scl: GPIO48
+  # Płytka ma także IMU na tej samej magistrali. Nie skanuj go: FT3168 może
+  # stracić łączność po dostępie do innego urządzenia w trybie czuwania.
+  scan: false
+  # Producent używa 300 kHz dla FT3168; na tym etapie odczytujemy tylko dotyk.
+  frequency: 300kHz
+
+# --- Wyświetlacz: panel ma natywnie układ pionowy, ale pracuje poziomo. ---
+display:
+  - platform: mipi_spi
+    id: amoled
+    # Preset Waveshare dla tej płytki dodaje wymagany offset kolumn CO5300: 20 px.
+    model: WAVESHARE-ESP32-S3-TOUCH-AMOLED-1.64
+    bus_mode: quad
+    spi_id: display_spi
+    # Offset X=20 px i rozdzielczość 280 × 456 pochodzą z presetu płytki.
+    # Dla przyjętej roboczo rewizji V1 skrypt podstawia GPIO9.
+    cs_pin: ${display_cs_pin}
+    reset_pin: GPIO21
+    # Jasność AMOLED: zakres 0–255.
+    brightness: 220
+    color_order: rgb
+    spi_mode: mode0
+    # Niższy zegar QSPI (zamiast domyślnych 10 MHz) pomaga sprawdzić i
+    # ograniczyć artefakty obrazu przy niestabilnym połączeniu panelu.
+    data_rate: 5MHz
+    auto_clear_enabled: false
+    update_interval: never
+
+# Odpytuj standardowe PID-y OBD-II. Demo odcina pętlę diagnostyczną, by dane
+# symulowane nigdy nie mieszały się z odpowiedziami samochodu.
+interval:
+  - interval: 50ms
+    then:
+      - lambda: |-
+          if (!id(demo_mode) && ${can_bus_enabled}) uds_manager.loop();
+
+  # Odświeżanie prezentacji i znaczników świeżości; ramki odpytuje wyłącznie
+  # osobna pętla diagnostyczna, z wyłączeniem trybu DEMO.
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (id(demo_mode)) {
+            // Jednorazowy 120-sekundowy pokaz: 90 s regeneracji, potem 30 s chłodzenia.
+            // Wartości są fikcyjne i widocznie oznaczone etykietą DEMO na każdej karcie.
+            const uint32_t elapsed_s = (millis() - id(demo_start_ms)) / 1000;
+            const bool regenerating = elapsed_s < 90;
+            const float soot_calc = regenerating
+                ? 23.6f - (17.2f * std::min<uint32_t>(elapsed_s, 89) / 89.0f)
+                : 6.4f;
+            const float soot_meas = regenerating
+                ? 19.4f - (18.2f * std::min<uint32_t>(elapsed_s, 89) / 89.0f)
+                : 1.2f;
+            float dpf_temp;
+            float turbo_temp;
+            if (regenerating) {
+              dpf_temp = 610.0f + static_cast<float>(elapsed_s % 15) * 2.0f;
+              turbo_temp = 480.0f + static_cast<float>(elapsed_s % 10) * 3.0f;
+            } else {
+              const uint32_t cool_s = std::min<uint32_t>(elapsed_s - 90, 30);
+              dpf_temp = std::max(180.0f, 638.0f - static_cast<float>(cool_s) * 15.0f);
+              turbo_temp = std::max(160.0f, 507.0f - static_cast<float>(cool_s) * 11.0f);
+            }
+
+            id(soot_calculated).publish_state(soot_calc);
+            id(soot_measured).publish_state(soot_meas);
+            id(distance_since_regen).publish_state(regenerating ? 186.0f : 0.0f);
+            id(temp_before_dpf).publish_state(dpf_temp);
+            id(temp_before_turbo).publish_state(turbo_temp);
+            id(obd_dpf_inlet_temperature).publish_state(dpf_temp);
+            id(obd_engine_rpm).publish_state(regenerating ? 2200.0f : 850.0f);
+            id(obd_coolant_temperature).publish_state(92.0f);
+            id(soot_calculated_available).publish_state(true);
+            id(soot_measured_available).publish_state(true);
+            id(distance_since_regen_available).publish_state(true);
+            id(temp_before_dpf_available).publish_state(true);
+            id(temp_before_turbo_available).publish_state(true);
+            id(regen_data_available).publish_state(true);
+            id(dpf_regen).publish_state(regenerating);
+            id(obd_link_available).publish_state(false);
+            if (id(dpf_regen_source_text).state != "DEMO — DANE SYMULOWANE") {
+              id(dpf_regen_source_text).publish_state("DEMO — DANE SYMULOWANE");
+            }
+            if (id(obd_dpf_regen_pid_support_text).state != "demo") {
+              id(obd_dpf_regen_pid_support_text).publish_state("demo");
+            }
+          } else {
+            // Zwykły tryb nadal korzysta wyłącznie ze świeżych danych sterownika.
+            id(soot_calculated_available).publish_state(uds_manager.is_did_fresh(0xF402, ${data_stale_timeout_ms}));
+            id(soot_measured_available).publish_state(uds_manager.is_did_fresh(0xF403, ${data_stale_timeout_ms}));
+            id(distance_since_regen_available).publish_state(uds_manager.is_did_fresh(0xF404, ${data_stale_timeout_ms}));
+            const bool dpf_temp_uds_fresh = uds_manager.is_did_fresh(0xF405, ${data_stale_timeout_ms});
+            const bool dpf_temp_obd_fresh = uds_manager.is_obd_pid_fresh(0x7C, ${data_stale_timeout_ms}) && uds_manager.is_obd_pid_supported(0x7C);
+            id(temp_before_dpf_available).publish_state(dpf_temp_uds_fresh || dpf_temp_obd_fresh);
+            id(temp_before_turbo_available).publish_state(uds_manager.is_did_fresh(0xF406, ${data_stale_timeout_ms}));
+            id(regen_data_available).publish_state(uds_manager.has_fresh_regen_data(${data_stale_timeout_ms}));
+            const std::string regen_source = uds_manager.regen_data_source(${data_stale_timeout_ms});
+            if (id(dpf_regen_source_text).state != regen_source) {
+              id(dpf_regen_source_text).publish_state(regen_source);
+            }
+            const std::string regen_pid_support = !uds_manager.is_obd_pid_support_known(0x8B)
+                ? "unknown"
+                : (uds_manager.is_obd_pid_supported(0x8B) ? "supported" : "unsupported");
+            if (id(obd_dpf_regen_pid_support_text).state != regen_pid_support) {
+              id(obd_dpf_regen_pid_support_text).publish_state(regen_pid_support);
+            }
+            id(obd_link_available).publish_state(uds_manager.has_obd_link(${data_stale_timeout_ms}));
+            if (!dpf_temp_uds_fresh && dpf_temp_obd_fresh) {
+              const float dpf_temp = id(obd_dpf_inlet_temperature).state;
+              lv_bar_set_value(id(dpf_temp_bar), static_cast<int>(std::clamp(dpf_temp, 0.0f, 700.0f)), LV_ANIM_OFF);
+              lv_label_set_text(id(dpf_temp_label), esphome::str_sprintf("%.0f °C", dpf_temp).c_str());
+            } else if (!dpf_temp_uds_fresh && !dpf_temp_obd_fresh) {
+              lv_bar_set_value(id(dpf_temp_bar), 0, LV_ANIM_OFF);
+              lv_label_set_text(id(dpf_temp_label), "-- °C");
+            }
+          }
+      - if:
+          condition:
+            lambda: return id(demo_mode);
+          then:
+            - lvgl.widget.show: demo_badge_main
+            - lvgl.widget.show: demo_badge_temp
+            - lvgl.widget.show: demo_badge_filter
+            - lvgl.widget.show: demo_badge_ecu
+          else:
+            - lvgl.widget.hide: demo_badge_main
+            - lvgl.widget.hide: demo_badge_temp
+            - lvgl.widget.hide: demo_badge_filter
+            - lvgl.widget.hide: demo_badge_ecu
+  # Alert jest osobnym widgetem każdej strony, aby uniknąć artefaktu zielonego
+  # pasa obserwowanego przy użyciu statusu na przezroczystej warstwie LVGL.
+  # Na aktualnie otwartej stronie alert pojawi się tylko przy świeżej regeneracji.
+  - interval: 500ms
+    then:
+      # Ramka i migająca belka używają jednego źródła prawdy w tym samym
+      # cyklu. Zapobiega to pozostaniu napisu „DPF OK” podczas alarmu.
+      - lvgl.label.update:
+          id: regen_status_label
+          text: !lambda |-
+            // Regeneracja ma pierwszeństwo przed tekstem spoczynkowym.
+            // DPF OK pokazujemy wyłącznie przy świeżym, jawnym stanie „nieaktywna”.
+            if (id(regen_data_available).state && id(dpf_regen).state) return std::string("NIE GAŚ!");
+            if (!id(regen_data_available).state) return std::string("BRAK DANYCH");
+            return std::string("DPF OK");
+          text_color: !lambda |-
+            if (!id(regen_data_available).state) return lv_color_hex(0xFFB547);
+            return id(dpf_regen).state ? lv_color_hex(0xF2F5F8) : lv_color_hex(0x32D6C5);
+      - if:
+          condition:
+            lambda: return id(regen_data_available).state && id(dpf_regen).state;
+          then:
+            - lvgl.widget.show: regen_alert_main
+            - lvgl.widget.show: regen_alert_temp
+            - lvgl.widget.show: regen_alert_filter
+            - lvgl.widget.show: regen_alert_ecu
+            - lvgl.widget.update:
+                id: regen_alert_main
+                bg_color: !lambda |-
+                  return ((millis() / 500) % 2 == 0)
+                      ? lv_color_hex(0xC6283D)
+                      : lv_color_hex(0xFF9F1C);
+            - lvgl.widget.update:
+                id: regen_alert_temp
+                bg_color: !lambda |-
+                  return ((millis() / 500) % 2 == 0)
+                      ? lv_color_hex(0xC6283D)
+                      : lv_color_hex(0xFF9F1C);
+            - lvgl.widget.update:
+                id: regen_alert_filter
+                bg_color: !lambda |-
+                  return ((millis() / 500) % 2 == 0)
+                      ? lv_color_hex(0xC6283D)
+                      : lv_color_hex(0xFF9F1C);
+            - lvgl.widget.update:
+                id: regen_alert_ecu
+                bg_color: !lambda |-
+                  return ((millis() / 500) % 2 == 0)
+                      ? lv_color_hex(0xC6283D)
+                      : lv_color_hex(0xFF9F1C);
+          else:
+            - lvgl.widget.hide: regen_alert_main
+            - lvgl.widget.hide: regen_alert_temp
+            - lvgl.widget.hide: regen_alert_filter
+            - lvgl.widget.hide: regen_alert_ecu
+
+# --- Encje ESPHome z wartościami odczytanymi przez uds_audi.h. ---
+sensor:
+  # Dane OBD publikowane przez aktywny, tylko-odczytowy menedżer diagnostyczny.
+  - platform: template
+    id: obd_engine_rpm
+    name: "OBD Engine RPM"
+    unit_of_measurement: "rpm"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    id: obd_coolant_temperature
+    name: "OBD Coolant Temperature"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # Standardowy PID 01 7A: różnica ciśnień DPF (kPa), jeśli pole jest wspierane.
+  - platform: template
+    id: obd_dpf_delta_pressure
+    name: "OBD DPF Differential Pressure"
+    unit_of_measurement: "kPa"
+    accuracy_decimals: 2
+    update_interval: never
+
+  # Standardowy PID 01 7C: temperatura wlotowa DPF Bank 1, jeśli wspierana.
+  - platform: template
+    id: obd_dpf_inlet_temperature
+    name: "OBD DPF Inlet Temperature"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # Standardowy PID 01 0B: bezwzględne ciśnienie w kolektorze dolotowym.
+  # To wartość MAP (zawiera ciśnienie atmosferyczne), a nie bezpośredni pomiar
+  # względnego doładowania turbosprężarki.
+  - platform: template
+    id: obd_intake_manifold_pressure
+    name: "OBD Intake Manifold Absolute Pressure"
+    unit_of_measurement: "kPa"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # Standardowy PID 01 33: ciśnienie barometryczne bezwzględne.
+  - platform: template
+    id: obd_barometric_pressure
+    name: "OBD Barometric Pressure"
+    unit_of_measurement: "kPa"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # MAP minus BARO; szacunkowe ciśnienie względne w kolektorze dolotowym.
+  - platform: template
+    id: obd_estimated_boost_pressure
+    name: "OBD Estimated Intake Gauge Pressure"
+    unit_of_measurement: "kPa"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # Obliczona masa sadzy. Zakres paska 0–40 g jest wyłącznie wizualny, a nie
+  # potwierdzonym progiem regeneracji ani limitem dla konkretnego sterownika.
+  - platform: template
+    id: soot_calculated
+    name: "DPF Calculated Soot Mass"
+    unit_of_measurement: "g"
+    accuracy_decimals: 1
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.bar.update:
+            id: soot_progress_bar
+            value: !lambda |-
+              if (x < 0.0f) return 0;
+              // Ograniczamy tylko wskaźnik; etykieta zachowuje surowy odczyt.
+              if (x > 40.0f) return 40;
+              return static_cast<int>(x);
+        - lvgl.label.update:
+            id: soot_value_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.1f g", x);
+
+  # Zmierzona masa sadzy; liczba znika z UI po utracie świeżości.
+  - platform: template
+    id: soot_measured
+    name: "DPF Measured Soot Mass"
+    unit_of_measurement: "g"
+    accuracy_decimals: 1
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: soot_measured_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.1f g", x);
+
+  # Dystans przejechany od ostatniej regeneracji DPF.
+  - platform: template
+    id: distance_since_regen
+    name: "DPF Distance Since Regeneration"
+    unit_of_measurement: "km"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: distance_value_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.0f km", x);
+
+  # Temperatura spalin przed DPF. Limit tutaj musi odpowiadać dpf_temp_bar.max_value.
+  - platform: template
+    id: temp_before_dpf
+    name: "Exhaust Temperature Before DPF"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.bar.update:
+            id: dpf_temp_bar
+            value: !lambda |-
+              if (x < 0.0f) return 0;
+              if (x > 700.0f) return 700;
+              return static_cast<int>(x);
+        - lvgl.label.update:
+            id: dpf_temp_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.0f °C", x);
+
+  # Temperatura spalin przed turbosprężarką. Limit musi odpowiadać turbo_temp_bar.max_value.
+  - platform: template
+    id: temp_before_turbo
+    name: "Exhaust Temperature Before Turbo"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.bar.update:
+            id: turbo_temp_bar
+            value: !lambda |-
+              if (x < 0.0f) return 0;
+              if (x > 800.0f) return 800;
+              return static_cast<int>(x);
+        - lvgl.label.update:
+            id: turbo_temp_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.0f °C", x);
+
+# Identyfikacja sterownika przez standardowy OBD Service 09 / InfoType 0A.
+# Pole jest opcjonalne; gdy ECU go nie udostępnia, encja pozostaje pusta.
+text_sensor:
+  - platform: template
+    id: obd_ecu_name
+    name: "OBD ECU Name"
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: ecu_name_label
+            text: !lambda |-
+              if (x.empty()) return std::string("ECU: brak odczytu");
+              return std::string("ECU: ") + x.substr(0, 36);
+  - platform: template
+    id: obd_calibration_ids
+    name: "OBD Calibration IDs"
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: ecu_calid_label
+            text: !lambda |-
+              if (x.empty()) return std::string("CALID: brak odczytu");
+              return std::string("CALID: ") + x.substr(0, 38);
+  - platform: template
+    id: ecu_profile_selection_text
+    name: "Selected ECU Profile"
+    entity_category: config
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: ecu_profile_selected_label
+            text: !lambda return std::string(x);
+        - lvgl.widget.update:
+            id: ecu_profile_auto_option
+            bg_color: !lambda |-
+              return id(ecu_profile_selection) == 0 ? lv_color_hex(0x123B46) : lv_color_hex(0x151E2B);
+        - lvgl.widget.update:
+            id: ecu_profile_cjcd_option
+            bg_color: !lambda |-
+              return id(ecu_profile_selection) == 1 ? lv_color_hex(0x123B46) : lv_color_hex(0x151E2B);
+  # Trójstanowy status do automatyzacji Home Assistant. "unavailable" oznacza,
+  # że ECU nie potwierdziło obsługi PID-u albo dane utraciły świeżość.
+  - platform: template
+    id: dpf_regen_status_text
+    name: "DPF Regeneration Status"
+    update_interval: never
+  # Ułatwia rozróżnienie braku odpowiedzi PID 0x8B od jawnej informacji,
+  # że sterownik nie obsługuje pola statusu regeneracji.
+  - platform: template
+    id: obd_dpf_regen_pid_support_text
+    name: "OBD DPF Regen PID 0x8B Support"
+    update_interval: never
+  # Pokazuje, z którego zweryfikowanego źródła pochodzi bieżący stan regeneracji.
+  - platform: template
+    id: dpf_regen_source_text
+    name: "DPF Regeneration Data Source"
+    update_interval: never
+
+# Flaga aktywnej regeneracji oraz zmiana tekstu/koloru jej wskaźnika.
+binary_sensor:
+  # Łącze OBD-II oznacza świeżą, poprawną odpowiedź na co najmniej jeden PID.
+  - platform: template
+    id: obd_link_available
+    internal: true
+
+  - platform: template
+    id: dpf_regen
+    name: "DPF Regeneration Active"
+    # Do not expose an unverified placeholder as a false/negative reading in Home Assistant.
+    # Remove `internal` only after this ECU profile's regeneration DID and decoder are validated.
+    internal: true
+    on_state:
+      then:
+        - lambda: |-
+            id(dpf_regen_status_text).publish_state(
+                !id(regen_data_available).state ? "unavailable" : (x ? "active" : "inactive"));
+
+  # Sama odpowiedź ECU nie wystarcza: status musi być aktualny, a PID/DID jawnie
+  # obsługiwany. Bez tego ekran pokazuje brak danych i nie wyświetla alarmu.
+  - platform: template
+    id: regen_data_available
+    name: "DPF Regeneration Status Available"
+    entity_category: diagnostic
+    on_state:
+      then:
+        - lambda: |-
+            id(dpf_regen_status_text).publish_state(
+                !x ? "unavailable" : (id(dpf_regen).state ? "active" : "inactive"));
+
+  # Każda wartość ma oddzielny timeout. Świeża odpowiedź z innego DID-u nie
+  # może pozostawić starej liczby na ekranie jako pozornie aktualnej.
+  - platform: template
+    id: soot_calculated_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.bar.update:
+                  id: soot_progress_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: soot_value_label
+                  text: "--.- g"
+
+  - platform: template
+    id: soot_measured_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.label.update:
+                  id: soot_measured_label
+                  text: "--.- g"
+
+  - platform: template
+    id: distance_since_regen_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.label.update:
+                  id: distance_value_label
+                  text: "--- km"
+
+  - platform: template
+    id: temp_before_dpf_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.bar.update:
+                  id: dpf_temp_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: dpf_temp_label
+                  text: "-- °C"
+
+  - platform: template
+    id: temp_before_turbo_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.bar.update:
+                  id: turbo_temp_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: turbo_temp_label
+                  text: "-- °C"
+
+
+# --- Kontroler dotyku FT3168; orientację obsługuje konfiguracja LVGL. ---
+touchscreen:
+  - platform: ft3168
+    id: my_touch
+    display: amoled
+    address: 0x38
+    # Polling 100 Hz zmniejsza ryzyko pominięcia krótkiego raportu dotyku.
+    update_interval: 10ms
+
+# Czcionki UI. Pliki Ubuntu są dołączone do projektu i zawierają polskie znaki.
+# Rozmiary ról ustawiasz wyżej w substitutions: small/nav/label/value/hero.
+font:
+  - file:
+      type: local
+      path: ../fonts/Ubuntu-R.ttf
+    id: ui_small
+    size: ${ui_font_small}
+    bpp: 4
+    glyphs: [" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż°%.,:;!?+-_/()[]<>—–•…"]
+  - file:
+      type: local
+      path: ../fonts/Ubuntu-B.ttf
+    id: ui_nav
+    size: ${ui_font_nav}
+    bpp: 4
+    glyphs: [" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż°%.,:;!?+-_/()[]<>—–•…"]
+  - file:
+      type: local
+      path: ../fonts/Ubuntu-R.ttf
+    id: ui_label
+    size: ${ui_font_label}
+    bpp: 4
+    glyphs: [" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż°%.,:;!?+-_/()[]<>—–•…"]
+  - file:
+      type: local
+      path: ../fonts/Ubuntu-B.ttf
+    id: ui_value
+    size: ${ui_font_value}
+    bpp: 4
+    glyphs: [" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż°%.,:;!?+-_/()[]<>—–•…"]
+  - file:
+      type: local
+      path: ../fonts/Ubuntu-B.ttf
+    id: ui_hero
+    size: ${ui_font_hero}
+    bpp: 4
+    glyphs: [" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż°%.,:;!?+-_/()[]<>—–•…"]
+
+# --- Interfejs LVGL: poziomy ekran 456 × 280 px. ---
+lvgl:
+  displays:
+    - amoled
+  touchscreens:
+    - my_touch
+  # Obrót ekranu i współrzędnych dotyku obsługuje LVGL.
+  rotation: 90
+  # Duża domyślna czcionka; poszczególne elementy mogą używać ról z font:.
+  text_font: ui_label
+  text_color: 0xF2F5F8
+  bg_color: 0x0B1018
+  border_width: 0
+  pages:
+    - id: main_page
+      bg_color: 0x0B1018
+      # Ekran główny: duża masa sadzy, prosty pasek zakresu i status regeneracji.
+      widgets:
+        - label:
+            id: demo_badge_main
+            align: TOP_LEFT
+            x: 368
+            y: 36
+            width: 76
+            height: 22
+            text: "DEMO"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            bg_opa: cover
+            radius: 6
+            border_width: 1
+            border_color: 0xFFB547
+            border_opa: cover
+            hidden: true
+        - label:
+            id: soot_value_label
+            align: TOP_LEFT
+            x: 12
+            y: 58
+            width: 220
+            height: 62
+            text: "--.- g"
+            text_align: CENTER
+            text_font: ui_hero
+            text_color: 0xF2F5F8
+        - label:
+            align: TOP_LEFT
+            x: 12
+            y: 124
+            width: 220
+            height: 28
+            text: "OBLICZONA MASA SADZY"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xB4C1CE
+        - bar:
+            id: soot_progress_bar
+            align: TOP_LEFT
+            x: 26
+            y: 163
+            width: 192
+            height: 18
+            min_value: 0
+            # Skala paska służy tylko wizualizacji; nie jest limitem ECU.
+            max_value: 40
+            value: 0
+            bg_color: 0x263344
+            indicator:
+              bg_color: 0x32D6C5
+        - label:
+            id: regen_status_label
+            align: TOP_LEFT
+            x: 244
+            y: 78
+            width: 200
+            height: 64
+            text: "BRAK DANYCH"
+            text_align: CENTER
+            text_font: ui_label
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            bg_opa: cover
+            radius: 12
+            border_width: 2
+            border_color: 0x315071
+            border_opa: cover
+            # Stała wysokość i padding centrują krótki status wewnątrz ramki.
+            pad_top: 17
+        - label:
+            id: regen_alert_main
+            align: TOP_MID
+            width: 100%
+            height: 34
+            hidden: true
+            border_width: 0
+            border_opa: 0%
+            outline_width: 0
+            shadow_opa: 0%
+            bg_opa: cover
+            radius: 10
+            text: "REGENERACJA DPF"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFFFFF
+            pad_top: 5
+            clickable: false
+        # Nawigacja należy do tej strony. Brak globalnej warstwy nakładanej
+        # na ekran zapobiega rysowaniu jej tła jako zielonego pasa.
+        - label:
+            align: BOTTOM_LEFT
+            x: 8
+            y: 0
+            width: 102
+            height: 52
+            text: "DPF"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0x32D6C5
+            bg_color: 0x123B46
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: main_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 120
+            y: 0
+            width: 102
+            height: 52
+            text: "TEMP"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: detail_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 232
+            y: 0
+            width: 102
+            height: 52
+            text: "FILTR"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: filter_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 346
+            y: 0
+            width: 102
+            height: 52
+            text: "ECU"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: ecu_page
+    - id: detail_page
+      bg_color: 0x0B1018
+      # Temperatury: dwa duże odczyty i krótkie paski skali.
+      widgets:
+        - label:
+            id: demo_badge_temp
+            align: TOP_LEFT
+            x: 368
+            y: 36
+            width: 76
+            height: 22
+            text: "DEMO"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            bg_opa: cover
+            radius: 6
+            border_width: 1
+            border_color: 0xFFB547
+            border_opa: cover
+            hidden: true
+        - label:
+            align: TOP_LEFT
+            x: 18
+            y: 60
+            width: 198
+            height: 28
+            text: "PRZED TURBO"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xF2F5F8
+        - label:
+            id: turbo_temp_label
+            align: TOP_LEFT
+            x: 18
+            y: 95
+            width: 198
+            height: 52
+            text: "-- °C"
+            text_align: CENTER
+            text_font: ui_value
+            text_color: 0xFFB547
+        - bar:
+            id: turbo_temp_bar
+            align: TOP_LEFT
+            x: 24
+            y: 158
+            width: 186
+            height: 18
+            min_value: 0
+            # To zakres wskaźnika, nie temperatura docelowa regeneracji.
+            max_value: 800
+            value: 0
+            bg_color: 0x263344
+            indicator:
+              bg_color: 0xFFB547
+        - label:
+            align: TOP_LEFT
+            x: 240
+            y: 60
+            width: 198
+            height: 28
+            text: "PRZED DPF"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xF2F5F8
+        - label:
+            id: dpf_temp_label
+            align: TOP_LEFT
+            x: 240
+            y: 95
+            width: 198
+            height: 52
+            text: "-- °C"
+            text_align: CENTER
+            text_font: ui_value
+            text_color: 0x32D6C5
+        - bar:
+            id: dpf_temp_bar
+            align: TOP_LEFT
+            x: 246
+            y: 158
+            width: 186
+            height: 18
+            min_value: 0
+            # Zakres wskaźnika jest bliski typowym temperaturom regeneracji DPF.
+            max_value: 700
+            value: 0
+            bg_color: 0x263344
+            indicator:
+              bg_color: 0x32D6C5
+        - label:
+            id: regen_alert_temp
+            align: TOP_MID
+            width: 100%
+            height: 34
+            hidden: true
+            border_width: 0
+            border_opa: 0%
+            outline_width: 0
+            shadow_opa: 0%
+            bg_opa: cover
+            radius: 10
+            text: "REGENERACJA DPF"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFFFFF
+            pad_top: 5
+            clickable: false
+        - label:
+            align: BOTTOM_LEFT
+            x: 8
+            y: 0
+            width: 102
+            height: 52
+            text: "DPF"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: main_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 120
+            y: 0
+            width: 102
+            height: 52
+            text: "TEMP"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0x32D6C5
+            bg_color: 0x123B46
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: detail_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 232
+            y: 0
+            width: 102
+            height: 52
+            text: "FILTR"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: filter_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 346
+            y: 0
+            width: 102
+            height: 52
+            text: "ECU"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: ecu_page
+    - id: filter_page
+      bg_color: 0x0B1018
+      # Dane filtra: krótka etykieta nad każdą dużą wartością.
+      widgets:
+        - label:
+            id: demo_badge_filter
+            align: TOP_LEFT
+            x: 368
+            y: 36
+            width: 76
+            height: 22
+            text: "DEMO"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            bg_opa: cover
+            radius: 6
+            border_width: 1
+            border_color: 0xFFB547
+            border_opa: cover
+            hidden: true
+        - label:
+            align: TOP_LEFT
+            x: 18
+            y: 66
+            width: 198
+            height: 30
+            text: "SADZA ZMIERZONA"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xF2F5F8
+        - label:
+            id: soot_measured_label
+            align: TOP_LEFT
+            x: 18
+            y: 104
+            width: 198
+            height: 54
+            text: "--.- g"
+            text_align: CENTER
+            text_font: ui_value
+            text_color: 0x32D6C5
+        - label:
+            align: TOP_LEFT
+            x: 240
+            y: 66
+            width: 198
+            height: 30
+            text: "OD REGENERACJI"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xF2F5F8
+        - label:
+            id: distance_value_label
+            align: TOP_LEFT
+            x: 240
+            y: 104
+            width: 198
+            height: 54
+            text: "--- km"
+            text_align: CENTER
+            text_font: ui_value
+            text_color: 0x32D6C5
+        - label:
+            id: regen_alert_filter
+            align: TOP_MID
+            width: 100%
+            height: 34
+            hidden: true
+            border_width: 0
+            border_opa: 0%
+            outline_width: 0
+            shadow_opa: 0%
+            bg_opa: cover
+            radius: 10
+            text: "REGENERACJA DPF"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFFFFF
+            pad_top: 5
+            clickable: false
+        - label:
+            align: BOTTOM_LEFT
+            x: 8
+            y: 0
+            width: 102
+            height: 52
+            text: "DPF"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: main_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 120
+            y: 0
+            width: 102
+            height: 52
+            text: "TEMP"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: detail_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 232
+            y: 0
+            width: 102
+            height: 52
+            text: "FILTR"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0x32D6C5
+            bg_color: 0x123B46
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: filter_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 346
+            y: 0
+            width: 102
+            height: 52
+            text: "ECU"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: ecu_page
+
+    - id: ecu_page
+      bg_color: 0x0B1018
+      # Wybór profilu ECU i przycisk uruchamiający jawnie oznaczoną symulację.
+      widgets:
+        - label:
+            id: demo_badge_ecu
+            align: TOP_LEFT
+            x: 368
+            y: 36
+            width: 76
+            height: 22
+            text: "DEMO"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            bg_opa: cover
+            radius: 6
+            border_width: 1
+            border_color: 0xFFB547
+            border_opa: cover
+            hidden: true
+        - label:
+            align: TOP_LEFT
+            x: 12
+            y: 32
+            width: 432
+            height: 24
+            text: "PROFIL ECU"
+            text_font: ui_label
+            text_color: 0xF2F5F8
+        - label:
+            id: ecu_profile_selected_label
+            align: TOP_LEFT
+            x: 12
+            y: 58
+            width: 432
+            height: 24
+            text: "AUTO / STANDARD OBD-II"
+            text_font: ui_small
+            text_color: 0x32D6C5
+        - label:
+            id: ecu_profile_auto_option
+            align: TOP_LEFT
+            x: 12
+            y: 82
+            width: 210
+            height: 42
+            text: "AUTO / OBD-II"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xF2F5F8
+            bg_color: 0x123B46
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lambda: |-
+                    id(ecu_profile_selection) = 0;
+                    id(ecu_profile_selection_text).publish_state("AUTO / STANDARD OBD-II");
+        - label:
+            id: ecu_profile_cjcd_option
+            align: TOP_LEFT
+            x: 234
+            y: 82
+            width: 210
+            height: 42
+            text: "CJCD / 03L906018SJ"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xF2F5F8
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lambda: |-
+                    id(ecu_profile_selection) = 1;
+                    id(ecu_profile_selection_text).publish_state("CJCD / 03L906018SJ (KANDYDAT)");
+        - label:
+            align: TOP_LEFT
+            x: 12
+            y: 128
+            width: 432
+            height: 20
+            text: "CJCD = kandydat; DID-y wymagają weryfikacji."
+            text_font: ui_small
+            text_color: 0xFFB547
+        - label:
+            id: demo_toggle_label
+            align: TOP_LEFT
+            x: 12
+            y: 153
+            width: 432
+            height: 34
+            text: "DEMO: WYŁ. — DOTKNIJ, ABY WŁĄCZYĆ"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFFFFF
+            bg_color: 0x354254
+            bg_opa: cover
+            radius: 9
+            border_width: 1
+            border_color: 0x60758C
+            border_opa: cover
+            clickable: true
+            on_click:
+              then:
+                - lambda: |-
+                    if (!id(demo_mode)) {
+                      // DEMO is also a strict CAN-silent mode: cancel the current
+                      // request and flush any frame still queued in the TWAI driver.
+                      uds_manager.cancel_pending_obd_request();
+                      id(obd_can).clear_transmit_queue();
+                      id(demo_mode) = true;
+                      id(demo_start_ms) = millis();
+                    } else {
+                      id(demo_mode) = false;
+                      id(soot_calculated_available).publish_state(false);
+                      id(soot_measured_available).publish_state(false);
+                      id(distance_since_regen_available).publish_state(false);
+                      id(temp_before_dpf_available).publish_state(false);
+                      id(temp_before_turbo_available).publish_state(false);
+                      id(regen_data_available).publish_state(false);
+                      id(dpf_regen).publish_state(false);
+                      id(dpf_regen_source_text).publish_state("unavailable");
+                      id(obd_dpf_regen_pid_support_text).publish_state("unknown");
+                    }
+                - if:
+                    condition:
+                      lambda: return id(demo_mode);
+                    then:
+                      - lvgl.label.update:
+                          id: demo_toggle_label
+                          text: "DEMO: WŁ. — DOTKNIJ, ABY ZATRZYMAĆ"
+                          text_color: 0xFFFFFF
+                      - lvgl.widget.update:
+                          id: demo_toggle_label
+                          bg_color: 0xA85212
+                          border_color: 0xFFB547
+                    else:
+                      - lvgl.label.update:
+                          id: demo_toggle_label
+                          text: "DEMO: WYŁ. — DOTKNIJ, ABY WŁĄCZYĆ"
+                          text_color: 0xFFFFFF
+                      - lvgl.widget.update:
+                          id: demo_toggle_label
+                          bg_color: 0x354254
+                          border_color: 0x60758C
+        - label:
+            id: ecu_name_label
+            align: TOP_LEFT
+            x: 12
+            y: 188
+            width: 432
+            height: 18
+            text: "ECU: brak odczytu"
+            text_font: ui_small
+            text_color: 0xB4C1CE
+        - label:
+            id: ecu_calid_label
+            align: TOP_LEFT
+            x: 12
+            y: 207
+            width: 432
+            height: 18
+            text: "CALID: brak odczytu"
+            text_font: ui_small
+            text_color: 0xB4C1CE
+        - label:
+            id: regen_alert_ecu
+            align: TOP_MID
+            width: 100%
+            height: 34
+            hidden: true
+            border_width: 0
+            border_opa: 0%
+            outline_width: 0
+            shadow_opa: 0%
+            bg_opa: cover
+            radius: 10
+            text: "REGENERACJA DPF"
+            text_align: CENTER
+            text_font: ui_small
+            text_color: 0xFFFFFF
+            pad_top: 5
+            clickable: false
+        - label:
+            align: BOTTOM_LEFT
+            x: 8
+            y: 0
+            width: 102
+            height: 52
+            text: "DPF"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: main_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 120
+            y: 0
+            width: 102
+            height: 52
+            text: "TEMP"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: detail_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 232
+            y: 0
+            width: 102
+            height: 52
+            text: "FILTR"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0xDCE5EC
+            bg_color: 0x151E2B
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: filter_page
+        - label:
+            align: BOTTOM_LEFT
+            x: 346
+            y: 0
+            width: 102
+            height: 52
+            text: "ECU"
+            text_align: CENTER
+            pad_top: 18
+            text_font: ui_nav
+            text_color: 0x32D6C5
+            bg_color: 0x123B46
+            radius: 10
+            bg_opa: cover
+            drop_shadow_color: 0x34708B
+            drop_shadow_opa: 75%
+            drop_shadow_radius: 5
+            drop_shadow_offset_x: 0
+            drop_shadow_offset_y: 2
+            clickable: true
+            on_click:
+              then:
+                - lvgl.page.show: ecu_page

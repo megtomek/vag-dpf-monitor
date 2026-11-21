@@ -1,0 +1,70 @@
+# Nie zapisuj sekretow Wi-Fi ani lokalnych artefaktow kompilacji w repozytorium.
+secrets.yaml
+# Skróty Windows wskazują lokalne ścieżki i nie przenoszą się na inne komputery.
+*.lnk
+.esphome/
+.esphome-data/
+.esphome-idf/
+.venv/
+build/
+*.bin
+*.elf
+*.py[cod]
+__pycache__/
+
+# ESP-IDF scratch build accidentally created in project root; canonical build is .esphome-data/.
+/bootloader/
+/bootloader-prefix/
+/CMakeFiles/
+/config/
+/esp-idf/
+/gdbinit/
+/toolchain/
+/app-flash_args
+/bootloader-flash_args
+/flash_app_args
+/flash_args
+/flash_args.in
+/flash_bootloader_args
+/flash_project_args
+/flasher_args.json
+/kconfigs.in
+/kconfigs_projbuild.in
+/ldgen_libraries
+/ldgen_libraries.in
+/otadata-flash_args
+/partition-table-flash_args
+/prefix_map_gdbinit
+/project_description.json
+/build.ninja
+/cmake_install.cmake
+/CMakeCache.txt
+/compile_commands.json
+/config.env
+
+# Local diagnostic logs are archived separately from source.
+/archive/diagnostics/*.log
+/logs/
+
+# Local backups of credentials; never commit.
+.secrets-backup/
+
+# Dane lokalne i eksporty diagnostyczne pozostaja na komputerze.
+/.codex-remote-attachments/
+/.github-upload/
+/archive/diagnostics/first-event-*/
+/firmware/archive/source-bundles/
+/automatic-events-start-*.txt
+/can-*.csv
+/can-*.txt
+/capture-*.csv
+/car-*.txt
+/drive-*.csv
+/event-TEST-*.csv
+/event-status-*.txt
+/ota-followup-*.txt
+/recorder-*.txt
+*.crdownload
+
+# Lokalne załączniki; nie są materiałem publikacji.
+/.codex-attachments/

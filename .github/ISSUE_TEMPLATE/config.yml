@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Pomoc / Support
+    url: https://github.com/megtomek/vag-dpf-monitor/blob/main/SUPPORT.md
+    about: Instrukcje i dane potrzebne do diagnozy / Read before asking for help
+  - name: Bezpieczeństwo / Security
+    url: https://github.com/megtomek/vag-dpf-monitor/blob/main/SECURITY.md
+    about: Jak poprosić o prywatny kanał / How to report sensitive issues

@@ -1,0 +1,827 @@
+substitutions:
+  # Nazwa urządzenia w ESPHome oraz nazwa widoczna w Home Assistant.
+  device_name: audi-dpf-monitor
+  friendly_name: VAG DPF Monitor
+  # Czas bez poprawnej odpowiedzi UDS, po którym odczyty uznajemy za nieaktualne.
+  data_stale_timeout_ms: "15000"
+  # Rewizja V1 używa GPIO9, a V1.1 GPIO46 jako CS wyświetlacza.
+  display_cs_pin: GPIO9
+  # Fizyczne adresowanie diagnostyczne CAN sterownika silnika.
+  # Ustawiaj według potwierdzonego profilu ECU; wartości poniżej są dla 11-bit
+  # ISO-TP: tester 0x7E0, odpowiedź ECU 0x7E8.
+  ecu_request_can_id: "0x7E0"
+  ecu_response_can_id: "0x7E8"
+
+# Local component: Waveshare's board uses FT3168 (I2C 0x38), not FT5x06.
+external_components:
+  - source:
+      type: local
+      path: components
+
+# Nazwa, plik nagłówkowy z obsługą UDS oraz inicjalizacja menedżera CAN.
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  includes:
+    - uds_audi.h
+  on_boot:
+    then:
+      - lambda: |-
+          uds_manager.configure(
+            id(dpf_can),
+            id(soot_calculated),
+            id(soot_measured),
+            id(distance_since_regen),
+            id(temp_before_turbo),
+            id(temp_before_dpf),
+            id(dpf_regen),
+            id(obd_engine_rpm),
+            id(obd_coolant_temperature),
+            id(obd_dpf_delta_pressure),
+            id(obd_dpf_inlet_temperature),
+            id(obd_ecu_name),
+            id(obd_calibration_ids),
+            ${ecu_request_can_id}
+          );
+
+# Płytka: ESP32-S3 z 16 MB Flash i 8 MB PSRAM.
+esp32:
+  board: esp32-s3-devkitc1-n16r8
+  # Waveshare ESP32-S3-Touch-AMOLED-1.64 has 16 MB Flash; do not rely on
+  # ESPHome's generic 4 MB default for this board definition.
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+# Logi diagnostyczne są widoczne w ESPHome podczas uruchomienia.
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+# Dane Wi-Fi trzymaj w secrets.yaml, nie wpisuj ich tutaj jawnie.
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Magistrala Quad SPI dla wyświetlacza AMOLED.
+spi:
+  - id: display_spi
+    type: quad
+    clk_pin: GPIO10
+    data_pins: [GPIO11, GPIO12, GPIO13, GPIO14]
+
+# Magistrala I2C dla kontrolera dotyku FT3168.
+i2c:
+  sda: GPIO47
+  scl: GPIO48
+  scan: true
+
+# --- Wyświetlacz: panel ma natywnie układ pionowy, ale pracuje poziomo. ---
+display:
+  - platform: mipi_spi
+    id: amoled
+    model: CO5300
+    bus_mode: quad
+    spi_id: display_spi
+    # Rozdzielczość natywna panelu w pionie; obrót 90° jest ustawiony w LVGL.
+    dimensions:
+      width: 280
+      height: 456
+    cs_pin: ${display_cs_pin}
+    reset_pin: GPIO21
+    # Jasność AMOLED: zakres 0–255.
+    brightness: 220
+    color_order: rgb
+    spi_mode: mode0
+    auto_clear_enabled: false
+    update_interval: never
+
+# --- Połączenie z ECU przez zewnętrzny transceiver CAN. ---
+canbus:
+  - platform: esp32_can
+    id: dpf_can
+    # Piny TX/RX muszą odpowiadać połączeniom z transceiverem CAN.
+    # GPIO1/2 sa wyprowadzone na zlaczu i nie koliduja z ekranem ani dotykiem.
+    # Polacz GPIO1 (TX) z D transceivera, a GPIO2 (RX) z R.
+    tx_pin: GPIO1
+    rx_pin: GPIO2
+    # Żądanie diagnostyczne do ECU (0x7E0), odpowiedź silnika (0x7E8).
+    can_id: ${ecu_request_can_id}
+    bit_rate: 500kbps
+    # Wymagany zewnętrzny transceiver CAN z logiką 3.3 V, np. SN65HVD230.
+    on_frame:
+      - can_id: ${ecu_response_can_id}
+        use_extended_id: false
+        then:
+          - lambda: |-
+              uds_manager.handle_rx(x);
+
+# --- Pętla biblioteki UDS: obsługuje żądania i odebrane ramki. ---
+interval:
+  # Częstotliwość obsługi ramek i zapytań UDS.
+  - interval: 50ms
+    then:
+      - lambda: |-
+          uds_manager.loop();
+  # Po czasie data_stale_timeout_ms bez poprawnej odpowiedzi dane stają się nieaktualne.
+  # Domyślne 15 s daje zapas dla cyklu sześciu zapytań i timeoutów ECU.
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(ecu_data_available).publish_state(uds_manager.has_fresh_data(${data_stale_timeout_ms}));
+          id(soot_calculated_available).publish_state(uds_manager.is_did_fresh(0xF402, ${data_stale_timeout_ms}));
+          id(soot_measured_available).publish_state(uds_manager.is_did_fresh(0xF403, ${data_stale_timeout_ms}));
+          id(distance_since_regen_available).publish_state(uds_manager.is_did_fresh(0xF404, ${data_stale_timeout_ms}));
+          id(temp_before_dpf_available).publish_state(uds_manager.is_did_fresh(0xF405, ${data_stale_timeout_ms}));
+          id(temp_before_turbo_available).publish_state(uds_manager.is_did_fresh(0xF406, ${data_stale_timeout_ms}));
+          id(regen_data_available).publish_state(uds_manager.has_fresh_regen_data(${data_stale_timeout_ms}));
+          id(obd_link_available).publish_state(uds_manager.has_obd_link(${data_stale_timeout_ms}));
+          const bool pressure_fresh = uds_manager.is_obd_pid_fresh(0x7A, ${data_stale_timeout_ms});
+          const bool temperature_fresh = uds_manager.is_obd_pid_fresh(0x7C, ${data_stale_timeout_ms});
+          const std::string pressure = !pressure_fresh ? "--" : (uds_manager.is_obd_pid_supported(0x7A) ? esphome::str_sprintf("%.2f", id(obd_dpf_delta_pressure).state) : "n/d");
+          const std::string temperature = !temperature_fresh ? "--" : (uds_manager.is_obd_pid_supported(0x7C) ? esphome::str_sprintf("%.0f", id(obd_dpf_inlet_temperature).state) : "n/d");
+          lv_label_set_text(id(obd_dpf_standard_label), esphome::str_sprintf("OBD DPF  dp %s kPa   T wlot %s C", pressure.c_str(), temperature.c_str()).c_str());
+          if (!uds_manager.has_obd_link(${data_stale_timeout_ms})) {
+            lv_label_set_text(id(ecu_data_label), "OBD: BRAK ODPOWIEDZI");
+          } else if (!id(obd_ecu_name).state.empty()) {
+            lv_label_set_text(id(ecu_data_label), esphome::str_sprintf("ECU: %s", id(obd_ecu_name).state.c_str()).c_str());
+          } else {
+            lv_label_set_text(id(ecu_data_label), "OBD: ECU ODPOWIADA");
+          }
+          lv_label_set_text(id(ecu_identity_name_label), id(obd_ecu_name).state.empty()
+              ? "Nazwa ECU: brak danych"
+              : esphome::str_sprintf("Nazwa ECU: %s", id(obd_ecu_name).state.c_str()).c_str());
+          const std::string calids = id(obd_calibration_ids).state;
+          if (calids.empty()) {
+            lv_label_set_text(id(ecu_calibration_label), "CALID: brak danych");
+          } else {
+            const std::string short_calids = calids.size() > 40 ? calids.substr(0, 40) + "..." : calids;
+            lv_label_set_text(id(ecu_calibration_label), esphome::str_sprintf("CALID: %s", short_calids.c_str()).c_str());
+          }
+          // Rozpoznanie ECU służy tu tylko do wskazania właściwego profilu.
+          // Sam CALID nie potwierdza dekodera DID ani nie włącza odczytów UDS.
+          if (!uds_manager.has_obd_link(${data_stale_timeout_ms})) {
+            lv_label_set_text(id(profile_status_label), "Profil: brak świeżej odpowiedzi OBD.");
+            lv_obj_set_style_text_color(id(profile_status_label), lv_color_hex(0xFFB547), 0);
+          } else if (calids.find("03L906018SJ") != std::string::npos) {
+            lv_label_set_text(id(profile_status_label), "Wykryto ECU 03L906018SJ (CJCD). Mapa DPF niezweryfikowana; aktywne są tylko dostępne standardowe PID-y OBD-II.");
+            lv_obj_set_style_text_color(id(profile_status_label), lv_color_hex(0xFFB547), 0);
+          } else if (calids.empty()) {
+            lv_label_set_text(id(profile_status_label), "Nie odczytano CALID. Profil producenta nierozpoznany; używane są dostępne standardowe PID-y OBD-II.");
+            lv_obj_set_style_text_color(id(profile_status_label), lv_color_hex(0x8C9AAA), 0);
+          } else {
+            lv_label_set_text(id(profile_status_label), "ECU nie ma zweryfikowanego profilu DPF. Używane są dostępne standardowe PID-y OBD-II.");
+            lv_obj_set_style_text_color(id(profile_status_label), lv_color_hex(0x8C9AAA), 0);
+          }
+  # Alarm widoczny nad każdą kartą. Działa tylko przy świeżym, obsługiwanym
+  # statusie regeneracji z OBD PID 8B albo zweryfikowanego profilu producenta.
+  - interval: 500ms
+    then:
+      - lvgl.widget.update:
+          id: regen_alert_frame
+          border_width: !lambda |-
+            if (!id(regen_data_available).state || !id(dpf_regen).state) return 0;
+            return ((millis() / 500) % 2 == 0) ? 6 : 0;
+
+# --- Encje ESPHome z wartościami odczytanymi przez uds_audi.h. ---
+sensor:
+  # Standardowe OBD-II: RPM i płyn sprawdzają łącze; PID-y 7A/7C mogą
+  # dostarczyć ciśnienie i temperaturę DPF, jeśli sterownik je obsługuje.
+  - platform: template
+    id: obd_engine_rpm
+    name: "OBD Engine RPM"
+    unit_of_measurement: "rpm"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: engine_rpm_label
+            text: !lambda |-
+              return esphome::str_sprintf("OBR: %.0f rpm", x);
+
+  - platform: template
+    id: obd_coolant_temperature
+    name: "OBD Coolant Temperature"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: coolant_temperature_label
+            text: !lambda |-
+              return esphome::str_sprintf("PŁYN: %.0f °C", x);
+
+  # Standardowy PID 01 7A: różnica ciśnień DPF (kPa), jeśli pole jest wspierane.
+  - platform: template
+    id: obd_dpf_delta_pressure
+    name: "OBD DPF Differential Pressure"
+    unit_of_measurement: "kPa"
+    accuracy_decimals: 2
+    update_interval: never
+
+  # Standardowy PID 01 7C: temperatura wlotowa DPF Bank 1, jeśli wspierana.
+  - platform: template
+    id: obd_dpf_inlet_temperature
+    name: "OBD DPF Inlet Temperature"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # Obliczona masa sadzy. Limit wykresu jest ustawiony niżej w arc.max_value.
+  - platform: template
+    id: soot_calculated
+    name: "DPF Calculated Soot Mass"
+    unit_of_measurement: "g"
+    accuracy_decimals: 1
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.arc.update:
+            id: soot_arc
+            value: !lambda |-
+              if (x < 0.0f) return 0;
+              // Wartość ograniczamy do tej samej granicy co skala łuku (40 g).
+              if (x > 40.0f) return 40;
+              return static_cast<int>(x);
+        - lvgl.label.update:
+            id: soot_value_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.1f g", x);
+
+  # Zmierzona masa sadzy z ECU (udostępniana jako encja; obecnie bez osobnego pola UI).
+  - platform: template
+    id: soot_measured
+    name: "DPF Measured Soot Mass"
+    unit_of_measurement: "g"
+    accuracy_decimals: 1
+    update_interval: never
+
+  # Dystans przejechany od ostatniej regeneracji DPF.
+  - platform: template
+    id: distance_since_regen
+    name: "DPF Distance Since Regeneration"
+    unit_of_measurement: "km"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: distance_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.0f km", x);
+
+  # Temperatura spalin przed DPF. Limit tutaj musi odpowiadać dpf_temp_bar.max_value.
+  - platform: template
+    id: temp_before_dpf
+    name: "Exhaust Temperature Before DPF"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.bar.update:
+            id: dpf_temp_bar
+            value: !lambda |-
+              if (x < 0.0f) return 0;
+              if (x > 700.0f) return 700;
+              return static_cast<int>(x);
+        - lvgl.label.update:
+            id: dpf_temp_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.0f °C", x);
+
+  # Temperatura spalin przed turbosprężarką. Limit musi odpowiadać turbo_temp_bar.max_value.
+  - platform: template
+    id: temp_before_turbo
+    name: "Exhaust Temperature Before Turbo"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    update_interval: never
+    on_value:
+      then:
+        - lvgl.bar.update:
+            id: turbo_temp_bar
+            value: !lambda |-
+              if (x < 0.0f) return 0;
+              if (x > 800.0f) return 800;
+              return static_cast<int>(x);
+        - lvgl.label.update:
+            id: turbo_temp_label
+            text: !lambda |-
+              return esphome::str_sprintf("%.0f °C", x);
+
+# Identyfikacja sterownika przez standardowy OBD Service 09 / InfoType 0A.
+# Pole jest opcjonalne; gdy ECU go nie udostępnia, encja pozostaje pusta.
+text_sensor:
+  - platform: template
+    id: obd_ecu_name
+    name: "OBD ECU Name"
+    update_interval: never
+  - platform: template
+    id: obd_calibration_ids
+    name: "OBD Calibration IDs"
+    update_interval: never
+
+# Flaga aktywnej regeneracji oraz zmiana tekstu/koloru jej wskaźnika.
+binary_sensor:
+  # Łącze OBD-II oznacza świeżą, poprawną odpowiedź na co najmniej jeden PID.
+  - platform: template
+    id: obd_link_available
+    internal: true
+    on_state:
+      then:
+        - lvgl.label.update:
+            id: ecu_data_label
+            text: !lambda |-
+              return std::string(x ? "OBD: ECU ODPOWIADA" : "OBD: BRAK ODPOWIEDZI");
+            text_color: !lambda |-
+              return x ? lv_color_hex(0x32D6C5) : lv_color_hex(0xFFB547);
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.label.update:
+                  id: engine_rpm_label
+                  text: "OBR: --- rpm"
+              - lvgl.label.update:
+                  id: coolant_temperature_label
+                  text: "PŁYN: -- °C"
+
+  - platform: template
+    id: dpf_regen
+    name: "DPF Regeneration Active"
+    # Do not expose an unverified placeholder as a false/negative reading in Home Assistant.
+    # Remove `internal` only after this ECU profile's regeneration DID and decoder are validated.
+    internal: true
+    on_state:
+      then:
+        - lvgl.label.update:
+            id: regen_status_label
+            text: !lambda |-
+              return std::string(x ? "NIE GAŚ SILNIKA!" : "WYPALANIE: NIEAKTYWNE");
+            text_color: !lambda |-
+              return x ? lv_color_hex(0xFFB547) : lv_color_hex(0x32D6C5);
+        - lvgl.label.update:
+            id: regen_detail_label
+            text: !lambda |-
+              return std::string(x ? "NIE GAŚ - TRWA WYPALANIE" : "REGENERACJA NIEAKTYWNA");
+            text_color: !lambda |-
+              return x ? lv_color_hex(0xFFB547) : lv_color_hex(0x32D6C5);
+        - lvgl.label.update:
+            id: global_regen_label
+            text: !lambda |-
+              return std::string(x ? "NIE GAŚ - TRWA WYPALANIE" : "WYPALANIE: NIEAKTYWNE");
+            text_color: !lambda |-
+              return x ? lv_color_hex(0xFFB547) : lv_color_hex(0x8C9AAA);
+
+  # Stan łączności: true, gdy co najmniej jeden znany DID odpowiedział poprawnie
+  # w czasie data_stale_timeout_ms. Nie potwierdza poprawności pozostałych DID-ów.
+  - platform: template
+    id: ecu_data_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.arc.update:
+                  id: soot_arc
+                  value: 0
+              - lvgl.label.update:
+                  id: soot_value_label
+                  text: "--.- g"
+              - lvgl.bar.update:
+                  id: turbo_temp_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: turbo_temp_label
+                  text: "-- °C"
+              - lvgl.bar.update:
+                  id: dpf_temp_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: dpf_temp_label
+                  text: "-- °C"
+              - lvgl.label.update:
+                  id: distance_label
+                  text: "--- km"
+
+  # Sama odpowiedź ECU nie wystarcza: status musi być aktualny, a PID/DID jawnie
+  # obsługiwany. Bez tego ekran pokazuje brak danych i nie wyświetla alarmu.
+  - platform: template
+    id: regen_data_available
+    internal: true
+    on_state:
+      then:
+        - lvgl.label.update:
+            id: global_regen_label
+            text: !lambda |-
+              if (!x) return std::string("WYPALANIE: BRAK ODCZYTU");
+              return std::string(id(dpf_regen).state ? "NIE GAŚ - TRWA WYPALANIE" : "WYPALANIE: NIEAKTYWNE");
+            text_color: !lambda |-
+              if (!x) return lv_color_hex(0xFFB547);
+              return id(dpf_regen).state ? lv_color_hex(0xFFB547) : lv_color_hex(0x8C9AAA);
+        - lvgl.label.update:
+            id: regen_status_label
+            text: !lambda |-
+              if (!x) return std::string("WYPALANIE: BRAK DANYCH");
+              return std::string(id(dpf_regen).state ? "NIE GAŚ SILNIKA!" : "WYPALANIE: NIEAKTYWNE");
+            text_color: !lambda |-
+              if (!x) return lv_color_hex(0xFFB547);
+              return id(dpf_regen).state ? lv_color_hex(0xFFB547) : lv_color_hex(0x32D6C5);
+        - lvgl.label.update:
+            id: regen_detail_label
+            text: !lambda |-
+              if (!x) return std::string("REGENERACJA: BRAK DANYCH");
+              return std::string(id(dpf_regen).state ? "NIE GAŚ - TRWA WYPALANIE" : "REGENERACJA NIEAKTYWNA");
+            text_color: !lambda |-
+              if (!x) return lv_color_hex(0xFFB547);
+              return id(dpf_regen).state ? lv_color_hex(0xFFB547) : lv_color_hex(0x32D6C5);
+
+  # Każda wartość ma oddzielny timeout. Świeża odpowiedź z innego DID-u nie
+  # może pozostawić starej liczby na ekranie jako pozornie aktualnej.
+  - platform: template
+    id: soot_calculated_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.arc.update:
+                  id: soot_arc
+                  value: 0
+              - lvgl.label.update:
+                  id: soot_value_label
+                  text: "--.- g"
+
+  - platform: template
+    id: soot_measured_available
+    internal: true
+
+  - platform: template
+    id: distance_since_regen_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.label.update:
+                  id: distance_label
+                  text: "--- km"
+
+  - platform: template
+    id: temp_before_dpf_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.bar.update:
+                  id: dpf_temp_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: dpf_temp_label
+                  text: "-- °C"
+
+  - platform: template
+    id: temp_before_turbo_available
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: return !x;
+            then:
+              - lvgl.bar.update:
+                  id: turbo_temp_bar
+                  value: 0
+              - lvgl.label.update:
+                  id: turbo_temp_label
+                  text: "-- °C"
+
+# --- Kontroler dotyku FT3168; orientację obsługuje konfiguracja LVGL. ---
+touchscreen:
+  - platform: ft3168
+    id: my_touch
+    display: amoled
+    address: 0x38
+    # Obrót dotyku jest automatycznie dopasowany przez LVGL poniżej.
+
+# --- Interfejs LVGL. Wymiary po obrocie: 456 × 280 px. ---
+lvgl:
+  displays:
+    - amoled
+  touchscreens:
+    - my_touch
+  # Obrót ustawiamy tutaj, nie w sekcji display ani touchscreen.
+  # LVGL dopasuje do niego także współrzędne dotyku.
+  rotation: 90
+  # Domyślna czcionka większości etykiet. Zmień np. na montserrat_18,
+  # jeśli chcesz większe napisy; wybierz rozmiar dostępny w ESPHome LVGL.
+  text_font: montserrat_16
+  text_color: 0xF2F5F8
+  bg_color: 0x0B1018
+  border_width: 0
+  pages:
+    - id: main_page
+      bg_color: 0x0B1018
+      widgets:
+        - label:
+            align: TOP_MID
+            # Pozycje x/y są w pikselach względem wskazanego wyrównania.
+            y: 36
+            text: "MONITOR DPF / VAG"
+            text_color: 0x8C9AAA
+        - label:
+            # Nagłówek umieszczony wewnątrz łuku, poniżej wartości w gramach.
+            # Zmień tekst_font globalnie powyżej, aby powiększyć także ten napis.
+            align: CENTER
+            x: -112
+            y: 54
+            text: "OBLICZONA MASA SADZY"
+            text_color: 0x8C9AAA
+        - arc:
+            id: soot_arc
+            # Wyrównanie CENTER odnosi się do środka ekranu. Ujemne x przesuwa
+            # łuk w lewo; zwiększ width/height, aby powiększyć wskaźnik.
+            align: CENTER
+            x: -112
+            y: 20
+            width: 220
+            height: 220
+            min_value: 0
+            # Zakres sadzy na ekranie. Zmień też limit 40 g w sensorze powyżej.
+            max_value: 40
+            start_angle: 135
+            end_angle: 45
+            value: 0
+            arc_color: 0x263344
+            indicator:
+              arc_color: 0x32D6C5
+            knob:
+              bg_color: 0x32D6C5
+        - label:
+            id: soot_value_label
+            align: CENTER
+            x: -112
+            # Ten offset trzyma wartość gramów w środku okręgu.
+            y: 20
+            text: "--.- g"
+            # Czcionka dużej wartości. Możesz zmienić np. na montserrat_36.
+            text_font: montserrat_32
+            text_color: 0xF2F5F8
+        - label:
+            id: engine_rpm_label
+            align: CENTER
+            x: 112
+            y: -42
+            text: "OBR: --- rpm"
+            text_font: montserrat_16
+            text_color: 0xF2F5F8
+        - label:
+            id: coolant_temperature_label
+            align: CENTER
+            x: 112
+            y: -14
+            text: "PŁYN: -- °C"
+            text_font: montserrat_16
+            text_color: 0xF2F5F8
+        - label:
+            id: regen_status_label
+            align: CENTER
+            # Prawa kolumna ekranu głównego.
+            x: 112
+            y: 28
+            width: 205
+            height: 54
+            text: "WYPALANIE: BRAK DANYCH"
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            radius: 14
+        - label:
+            align: BOTTOM_RIGHT
+            x: -18
+            y: -12
+            text: "Szczegóły →"
+            text_color: 0x8C9AAA
+            on_click:
+              then:
+                - lvgl.page.show: detail_page
+
+    - id: detail_page
+      bg_color: 0x0B1018
+      # Drugi ekran: status regeneracji, temperatury obok siebie i dystans.
+      widgets:
+        - label:
+            align: TOP_MID
+            y: 36
+            text: "TEMPERATURY I REGENERACJA"
+            text_color: 0x8C9AAA
+        - label:
+            align: TOP_LEFT
+            x: 18
+            y: 58
+            text: "Przed turbosprężarką"
+            text_color: 0xF2F5F8
+        - bar:
+            id: turbo_temp_bar
+            align: TOP_LEFT
+            x: 18
+            y: 94
+            width: 195
+            # Grubość paska w pikselach.
+            height: 18
+            min_value: 0
+            # Musi zgadzać się z ograniczeniem temperatury 800 w sensorze.
+            max_value: 800
+            value: 0
+            bg_color: 0x263344
+            indicator:
+              bg_color: 0xFFB547
+        - label:
+            id: turbo_temp_label
+            align: TOP_LEFT
+            x: 18
+            y: 119
+            text: "-- °C"
+            text_color: 0xFFB547
+        - label:
+            align: TOP_LEFT
+            x: 243
+            y: 58
+            text: "Przed filtrem DPF"
+            text_color: 0xF2F5F8
+        - bar:
+            id: dpf_temp_bar
+            align: TOP_LEFT
+            x: 243
+            y: 94
+            width: 195
+            height: 18
+            min_value: 0
+            # Musi zgadzać się z ograniczeniem temperatury 700 w sensorze.
+            max_value: 700
+            value: 0
+            bg_color: 0x263344
+            indicator:
+              bg_color: 0x32D6C5
+        - label:
+            id: dpf_temp_label
+            align: TOP_LEFT
+            x: 243
+            y: 119
+            text: "-- °C"
+            text_color: 0x32D6C5
+        - label:
+            id: regen_detail_label
+            align: TOP_MID
+            y: 153
+            width: 270
+            height: 32
+            text: "REGENERACJA: BRAK DANYCH"
+            text_color: 0xFFB547
+            bg_color: 0x151E2B
+            radius: 10
+        - label:
+            align: TOP_MID
+            y: 190
+            text: "DYSTANS OD WYPALANIA"
+            text_color: 0x8C9AAA
+        - label:
+            id: distance_label
+            align: TOP_MID
+            y: 214
+            text: "--- km"
+            text_font: montserrat_28
+            text_color: 0xF2F5F8
+        - label:
+            id: obd_dpf_standard_label
+            align: BOTTOM_MID
+            y: -34
+            text: "OBD DPF  dp -- kPa   T wlot -- C"
+            text_font: montserrat_14
+            text_color: 0x8C9AAA
+        - label:
+            align: BOTTOM_LEFT
+            x: 18
+            y: -12
+            text: "← Główny ekran"
+            text_color: 0x8C9AAA
+            on_click:
+              then:
+                - lvgl.page.show: main_page
+        - label:
+            align: BOTTOM_RIGHT
+            x: -18
+            y: -12
+            text: "Identyfikacja ECU →"
+            text_color: 0x8C9AAA
+            on_click:
+              then:
+                - lvgl.page.show: ecu_info_page
+
+    - id: ecu_info_page
+      bg_color: 0x0B1018
+      # Ekran diagnostyczny pomaga ustalić dokładny sterownik przed dodaniem
+      # zweryfikowanego profilu DPF. Sam identyfikator nie potwierdza mapy DID.
+      widgets:
+        - label:
+            align: TOP_MID
+            y: 38
+            text: "IDENTYFIKACJA STEROWNIKA"
+            text_color: 0x8C9AAA
+        - label:
+            id: ecu_identity_name_label
+            align: TOP_LEFT
+            x: 24
+            y: 88
+            width: 408
+            text: "Nazwa ECU: brak danych"
+            text_font: montserrat_18
+            text_color: 0xF2F5F8
+        - label:
+            id: ecu_calibration_label
+            align: TOP_LEFT
+            x: 24
+            y: 132
+            width: 408
+            text: "CALID: brak danych"
+            text_font: montserrat_16
+            text_color: 0x32D6C5
+        - label:
+            id: profile_status_label
+            align: TOP_LEFT
+            x: 24
+            y: 182
+            width: 408
+            height: 72
+            text: "Profil: oczekiwanie na identyfikację ECU."
+            text_font: montserrat_14
+            text_color: 0x8C9AAA
+        - label:
+            align: BOTTOM_LEFT
+            x: 18
+            y: -12
+            text: "← Temperatury"
+            text_color: 0x8C9AAA
+            on_click:
+              then:
+                - lvgl.page.show: detail_page
+
+  # Stały pasek nad stronami. Kliknięcia przechodzą do widgetów pod spodem.
+  top_layer:
+    widgets:
+      # Przezroczysta ramka na wspólnej warstwie obejmuje wszystkie ekrany.
+      # Jej szerokość zmienia automatyzacja co 500 ms tylko podczas potwierdzonej
+      # i aktualnej regeneracji; kliknięcia przechodzą do elementów pod spodem.
+      - obj:
+          id: regen_alert_frame
+          align: CENTER
+          width: 100%
+          height: 100%
+          radius: 0
+          bg_opa: transp
+          border_color: 0xFF253A
+          border_width: 0
+          border_side: [TOP, BOTTOM, LEFT, RIGHT]
+          clickable: false
+      - obj:
+          id: dpf_status_bar
+          align: TOP_MID
+          width: 100%
+          height: 28
+          radius: 0
+          border_width: 0
+          bg_color: 0x151E2B
+          clickable: false
+          widgets:
+            - label:
+                id: global_regen_label
+                align: LEFT_MID
+                x: 12
+                text: "WYPALANIE: BRAK ODCZYTU"
+                text_font: montserrat_14
+                text_color: 0xFFB547
+            - label:
+                id: ecu_data_label
+                align: RIGHT_MID
+                x: -12
+                text: "OBD: BRAK ODPOWIEDZI"
+                text_font: montserrat_14
+                text_color: 0xFFB547

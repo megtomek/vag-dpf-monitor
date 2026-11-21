@@ -1,0 +1,9 @@
+# Dedicated passive recorder build. No UDS polling or Flow Control callbacks.
+packages:
+  monitor: !include audi-dpf-monitor.yaml
+substitutions:
+  can_capture_enabled: "true"
+  can_bus_enabled: "true"
+  can_bus_mode: "LISTENONLY"
+  obd_polling_enabled: "false"
+  dpf_did_diagnostic_probe: "false"

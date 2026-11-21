@@ -1,0 +1,9 @@
+  - platform: template
+    id: ecu_profile_identity_text
+    name: "Zgodność profilu z ECU"
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: return std::string(uds_manager.profile_identity_status());
+    web_server:
+      sorting_group_id: dpf_web_settings
+      sorting_weight: 11

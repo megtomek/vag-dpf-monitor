@@ -1,0 +1,93 @@
+/*
+ * Lokalny motyw panelu VAG DPF (ESPHome Web Server v3).
+ * Strona działa w całości z firmware; nie pobiera fontów ani bibliotek z sieci.
+ * V3 renderuje większość kontrolek wewnątrz Web Components, dlatego z zewnątrz
+ * ustawiamy głównie właściwości dziedziczone i akcent używany przez frontend.
+ */
+:root {
+  color-scheme: dark;
+  --primary-color: #19d3c5;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  color: #edf4fb;
+  background: #08111c;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ESPHome v3 ustawia color-scheme inline; wymuś ciemny schemat z motywu. */
+html {
+  color-scheme: dark !important;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% -20%, #163044 0%, transparent 62%),
+    linear-gradient(160deg, #0c1724 0%, #08111c 58%, #070d15 100%);
+}
+
+esp-app {
+  display: block;
+  min-height: 100vh;
+  color-scheme: dark;
+  --primary-color: #19d3c5;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* One shared toolbar and download button in both LAN and AP. */
+.dpf-log-tools {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1100px;
+  width: calc(100% - 32px);
+  min-width: 0;
+  margin: 16px auto;
+  padding: 16px 20px;
+  border: 1px solid #294356;
+  border-radius: 14px;
+  background: #101f2e;
+  color: #edf4fb;
+}
+.dpf-log-description {font-weight: 600; font-size: 17px;}
+.dpf-log-description small {display:block; margin-top:6px; color:#b2c4d3; font-size:13px; font-weight:400;}
+.dpf-log-download {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+  border-radius: 10px;
+  background: #19d3c5;
+  color: #08111c;
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: normal;
+}
+.dpf-log-tools > :first-child {flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere;}
+.dpf-log-tools > .dpf-log-download {flex: 1 1 240px;}
+.dpf-log-download:hover {background:#63e9df;}
+.dpf-log-download:focus-visible {outline:3px solid #edf4fb; outline-offset:3px;}
+@media (max-width:600px) {
+  .dpf-log-tools {width:calc(100% - 24px); margin:12px; padding:14px; flex-direction:column; align-items:stretch;}
+  .dpf-log-tools > .dpf-log-download {flex: 0 1 auto; width:100%;}
+}

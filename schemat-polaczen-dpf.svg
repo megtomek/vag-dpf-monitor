@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Schemat połączeń monitora DPF Audi — Waveshare V1, SN65HVD230 i OBD-II</title>
+  <desc id="desc">Czytelny schemat przewodów zasilania z OBD-II, przetwornicy 5 V, płytki ESP32-S3 Waveshare oraz transceivera CAN SN65HVD230.</desc>
+  <defs>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#ff626b"/></marker>
+    <marker id="arrow-amber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#ffc857"/></marker>
+    <marker id="arrow-cyan" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#53d8fb"/></marker>
+    <marker id="arrow-yellow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#f4d35e"/></marker>
+    <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#6ee7a8"/></marker>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#68a9ff"/></marker>
+    <marker id="arrow-violet" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#c39bff"/></marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #eef4fb; }
+      .title { font-size: 34px; font-weight: 700; }
+      .subtitle { font-size: 18px; fill: #a9bacb; }
+      .card-title { font-size: 22px; font-weight: 700; }
+      .label { font-size: 18px; }
+      .small { font-size: 15px; fill: #b7c6d6; }
+      .pin { font-size: 17px; font-weight: 700; }
+      .card { fill: #131e2b; stroke: #31445a; stroke-width: 2; rx: 18; }
+      .port { fill: #0b1119; stroke: #91a7bb; stroke-width: 2; }
+      .wire { fill: none; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-thin { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1080" fill="#0a111b"/>
+  <text x="55" y="62" class="title">MONITOR DPF — SCHEMAT POŁĄCZEŃ</text>
+  <text x="55" y="94" class="subtitle">Aktualny wariant: Waveshare ESP32-S3 Touch AMOLED 1.64 V1 · CAN 500 kb/s · GPIO5/6 · SN65HVD230 · OBD-II</text>
+  <rect x="55" y="116" width="1490" height="2" fill="#26384b"/>
+
+  <!-- Wires first so they appear beneath the component cards. -->
+  <!-- OBD battery -> fuse -> buck IN+. -->
+  <path d="M390 350 H428" class="wire" stroke="#ff626b"/>
+  <rect x="428" y="332" width="58" height="36" rx="7" fill="#301a20" stroke="#ff626b" stroke-width="2"/>
+  <path d="M437 350 H447 L454 340 L463 360 L471 350 H486" class="wire-thin" stroke="#ff9a9f"/>
+  <path d="M486 350 H525" class="wire" stroke="#ff626b" marker-end="url(#arrow-red)"/>
+  <!-- OBD signal ground -> buck IN-. -->
+  <path d="M390 405 H525" class="wire" stroke="#8997a6" marker-end="url(#arrow-amber)"/>
+  <!-- Buck 5 V -> board. -->
+  <path d="M825 326 H900 V232 H1015" class="wire" stroke="#ffc857" marker-end="url(#arrow-amber)"/>
+  <!-- Buck OUT- -> board GND -> common reference. -->
+  <path d="M825 408 H940 V276 H1015" class="wire" stroke="#8997a6" marker-end="url(#arrow-amber)"/>
+  <!-- Board logic signals to CAN module. -->
+  <path d="M1085 451 V600" class="wire-thin" stroke="#53d8fb" marker-end="url(#arrow-cyan)"/>
+  <path d="M1165 451 V600" class="wire-thin" stroke="#8997a6" marker-end="url(#arrow-amber)"/>
+  <path d="M1245 451 V600" class="wire-thin" stroke="#f4d35e" marker-end="url(#arrow-yellow)"/>
+  <!-- CAN RX flows from transceiver R/RXD back into ESP32 GPIO6. -->
+  <path d="M1325 451 V600" class="wire-thin" stroke="#6ee7a8" marker-start="url(#arrow-green)"/>
+  <!-- OBD CAN pair to transceiver. -->
+  <!-- CANH/CANL are differential bus conductors; neither direction has an arrow. -->
+  <path d="M390 570 H930 V690 H1015" class="wire" stroke="#68a9ff"/>
+  <path d="M390 625 H970 V752 H1015" class="wire" stroke="#c39bff"/>
+
+  <!-- OBD-II plug / pin map. -->
+  <rect x="55" y="210" width="335" height="545" class="card"/>
+  <text x="82" y="250" class="card-title">ZŁĄCZE OBD-II</text>
+  <text x="82" y="278" class="small">Używane styki w tym projekcie</text>
+  <line x1="82" y1="296" x2="358" y2="296" stroke="#31445a" stroke-width="2"/>
+  <circle cx="92" cy="350" r="9" fill="#ff626b"/><text x="116" y="356" class="pin">16 — +12 V z auta</text>
+  <text x="116" y="379" class="small">→ bezpiecznik → chroniony tor 5 V</text>
+  <circle cx="92" cy="405" r="9" fill="#8997a6"/><text x="116" y="411" class="pin">5 — masa sygnałowa</text>
+  <text x="116" y="434" class="small">→ IN− przetwornicy / wspólna masa</text>
+  <circle cx="92" cy="570" r="9" fill="#68a9ff"/><text x="116" y="576" class="pin">6 — CAN-H</text>
+  <text x="116" y="599" class="small">→ CANH transceivera</text>
+  <circle cx="92" cy="625" r="9" fill="#c39bff"/><text x="116" y="631" class="pin">14 — CAN-L</text>
+  <text x="116" y="654" class="small">→ CANL transceivera</text>
+  <circle cx="92" cy="690" r="9" fill="#5c6875"/><text x="116" y="696" class="pin">4 — masa nadwozia</text>
+  <text x="116" y="719" class="small">W tym schemacie niepodłączony.</text>
+
+  <!-- DC/DC converter. -->
+  <rect x="525" y="235" width="300" height="255" class="card"/>
+  <text x="552" y="275" class="card-title">SAMOCHODOWA DC–DC</text>
+  <text x="552" y="305" class="small">Zakres wejścia dla auta</text>
+  <text x="552" y="329" class="small">Przepięcia + odwrotna polaryzacja</text>
+  <circle cx="525" cy="350" r="7" class="port"/><text x="548" y="356" class="label">IN+ z bezpiecznika</text>
+  <circle cx="525" cy="405" r="7" class="port"/><text x="548" y="411" class="label">IN− z OBD pin 5</text>
+  <line x1="552" y1="429" x2="798" y2="429" stroke="#31445a" stroke-width="2"/>
+  <text x="552" y="462" class="small">Ustaw / zmierz dokładnie 5,0 V</text>
+  <circle cx="825" cy="326" r="7" class="port"/><text x="685" y="327" class="label">OUT+ 5 V</text>
+  <circle cx="825" cy="408" r="7" class="port"/><text x="685" y="414" class="label">OUT− GND</text>
+
+  <!-- ESP32 board. -->
+  <rect x="1015" y="165" width="500" height="325" class="card"/>
+  <text x="1045" y="205" class="card-title">WAVESHARE ESP32-S3 AMOLED 1.64</text>
+  <text x="1045" y="232" class="small">Przyjęta rewizja V1 · nagłówki zgodnie z nadrukiem na PCB</text>
+  <circle cx="1015" cy="232" r="7" class="port"/><text x="1045" y="238" class="pin">5V — z OUT+ przetwornicy</text>
+  <circle cx="1015" cy="276" r="7" class="port"/><text x="1045" y="282" class="pin">GND — z OUT− / masa wspólna</text>
+  <line x1="1045" y1="302" x2="1485" y2="302" stroke="#31445a" stroke-width="2"/>
+  <text x="1045" y="331" class="small">Połączenia logiczne do SN65HVD230:</text>
+  <circle cx="1085" cy="451" r="7" class="port"/><text x="1054" y="377" class="pin">3V3</text>
+  <circle cx="1165" cy="451" r="7" class="port"/><text x="1127" y="377" class="pin">GND</text>
+  <circle cx="1245" cy="451" r="7" class="port"/><text x="1201" y="377" class="pin">GPIO5</text>
+  <circle cx="1325" cy="451" r="7" class="port"/><text x="1281" y="377" class="pin">GPIO6</text>
+  <text x="1045" y="414" class="small">VCC</text>
+  <text x="1127" y="414" class="small">GND</text>
+  <text x="1201" y="414" class="small">CAN TX</text>
+  <text x="1281" y="414" class="small">CAN RX</text>
+
+  <!-- CAN transceiver. -->
+  <rect x="1015" y="600" width="500" height="275" class="card"/>
+  <text x="1045" y="640" class="card-title">MODUŁ CAN SN65HVD230</text>
+  <text x="1045" y="666" class="small">Moduł zasilany napięciem 3,3 V</text>
+  <circle cx="1015" cy="690" r="7" class="port"/><text x="1045" y="696" class="pin">CANH ← OBD pin 6</text>
+  <circle cx="1015" cy="752" r="7" class="port"/><text x="1045" y="758" class="pin">CANL ← OBD pin 14</text>
+  <circle cx="1085" cy="600" r="7" class="port"/><text x="1054" y="723" class="small">VCC ← 3V3</text>
+  <circle cx="1165" cy="600" r="7" class="port"/><text x="1125" y="783" class="small">GND ← masa</text>
+  <circle cx="1245" cy="600" r="7" class="port"/><text x="1206" y="723" class="small">D / TXD ← GPIO5 (TX)</text>
+  <circle cx="1325" cy="600" r="7" class="port"/><text x="1285" y="783" class="small">R / RXD → GPIO6 (RX)</text>
+  <text x="1045" y="824" class="small">ESP TX (GPIO5) → TXD/D; ESP RX (GPIO6) ← RXD/R.</text>
+  <text x="1045" y="848" class="small">Połącz według nadruku na module, nie kolejności pinów.</text>
+
+  <!-- Numbered wiring guide and cautions. -->
+  <rect x="55" y="795" width="900" height="210" rx="18" fill="#101a27" stroke="#31445a" stroke-width="2"/>
+  <text x="82" y="835" class="card-title">KOLEJNOŚĆ POŁĄCZEŃ</text>
+  <text x="82" y="868" class="label"><tspan fill="#ff626b">1.</tspan> OBD 16 → bezpiecznik → samochodowy tor 5 V; OBD 5 → IN−.</text>
+  <text x="82" y="899" class="label"><tspan fill="#ffc857">2.</tspan> OUT+ 5 V → pin 5V płytki; OUT− → GND płytki.</text>
+  <text x="82" y="930" class="label"><tspan fill="#53d8fb">3.</tspan> ESP 3V3/GND/TX/RX → moduł 3V3/GND/TXD/RXD.</text>
+  <text x="82" y="961" class="label"><tspan fill="#68a9ff">4.</tspan> OBD 6/14 → CANH/CANL; prowadź je jako krótką skręconą parę.</text>
+
+  <rect x="990" y="908" width="555" height="112" rx="14" fill="#321d20" stroke="#ff626b" stroke-width="2"/>
+  <text x="1015" y="951" font-size="17" font-weight="700" fill="#ff9297">UWAGA: 12 V nigdy nie podłączaj do 5V ani 3V3.</text>
+  <text x="1015" y="978" class="small">Nie zasilaj równocześnie z USB i OBD; nie dodawaj terminatora 120 Ω.</text>
+  <text x="1015" y="1004" class="small">GPIO5/6 współdzielą gniazdo TF — przed pracą CAN wyjmij kartę microSD.</text>
+
+  <!-- Compact legend. -->
+  <g transform="translate(1015 520)">
+    <line x1="0" y1="0" x2="38" y2="0" stroke="#ff626b" stroke-width="5"/><text x="48" y="6" class="small">+12 V</text>
+    <line x1="137" y1="0" x2="175" y2="0" stroke="#ffc857" stroke-width="5"/><text x="185" y="6" class="small">5 V</text>
+    <line x1="260" y1="0" x2="298" y2="0" stroke="#53d8fb" stroke-width="5"/><text x="308" y="6" class="small">3,3 V</text>
+    <line x1="395" y1="0" x2="433" y2="0" stroke="#8997a6" stroke-width="5"/><text x="443" y="6" class="small">GND</text>
+  </g>
+</svg>

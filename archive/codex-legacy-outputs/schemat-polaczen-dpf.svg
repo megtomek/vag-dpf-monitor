@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1000" viewBox="0 0 1500 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Schemat połączeń monitora DPF: ESP32-S3, SN65HVD230 i OBD-II</title>
+  <desc id="desc">Schemat zasilania z OBD-II przez bezpiecznik i przetwornicę 5 V, połączeń CAN do ESP32-S3 oraz ostrzeżeniami dla instalacji samochodowej.</desc>
+  <defs>
+    <style>
+      .bg{fill:#f4f7fb}.card{fill:#fff;stroke:#cbd5e1;stroke-width:2}.title{font:700 30px Arial,sans-serif;fill:#10243a}.sub{font:16px Arial,sans-serif;fill:#526174}.head{font:700 19px Arial,sans-serif;fill:#17324d}.label{font:15px Arial,sans-serif;fill:#17324d}.small{font:13px Arial,sans-serif;fill:#526174}.pin{font:700 14px Arial,sans-serif;fill:#10243a}.power{stroke:#d97706;stroke-width:4;fill:none}.gnd{stroke:#475569;stroke-width:3;fill:none}.logic{stroke:#2563eb;stroke-width:3;fill:none}.canh{stroke:#16a34a;stroke-width:4;fill:none}.canl{stroke:#7c3aed;stroke-width:4;fill:none}.node{fill:#fff;stroke:#10243a;stroke-width:2}.warn{fill:#fff7ed;stroke:#fb923c;stroke-width:2}.warntext{font:14px Arial,sans-serif;fill:#7c2d12}.foot{font:12px Arial,sans-serif;fill:#64748b}
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#64748b"/></marker>
+  </defs>
+  <rect class="bg" width="1500" height="1000"/>
+  <text x="55" y="58" class="title">Monitor DPF — schemat połączeń</text>
+  <text x="55" y="88" class="sub">Wersja zgodna z bieżącym YAML: ESP32-S3-Touch-AMOLED-1.64 + SN65HVD230 + OBD-II CAN</text>
+
+  <!-- OBD-II -->
+  <rect class="card" x="55" y="170" width="285" height="475" rx="16"/>
+  <text x="80" y="210" class="head">Wtyczka OBD-II</text>
+  <text x="80" y="238" class="small">Widok funkcji pinów — patrz numeracja wtyczki</text>
+  <rect x="85" y="270" width="225" height="330" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <circle cx="130" cy="320" r="18" fill="#ffedd5" stroke="#d97706" stroke-width="2"/><text x="123" y="325" class="pin">16</text><text x="165" y="325" class="label">+12 V z auta</text>
+  <circle cx="130" cy="385" r="18" fill="#e2e8f0" stroke="#475569" stroke-width="2"/><text x="123" y="390" class="pin">5</text><text x="165" y="390" class="label">Masa sygnałowa</text>
+  <circle cx="130" cy="450" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="123" y="455" class="pin">6</text><text x="165" y="455" class="label">CAN High</text>
+  <circle cx="130" cy="515" r="18" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/><text x="123" y="520" class="pin">14</text><text x="165" y="520" class="label">CAN Low</text>
+  <text x="95" y="570" class="small">Pin 4: opcjonalnie masa nadwozia</text>
+
+  <!-- fuse and buck -->
+  <rect class="card" x="410" y="170" width="290" height="230" rx="16"/>
+  <text x="435" y="210" class="head">Zasilanie samochodowe</text>
+  <rect x="445" y="250" width="95" height="54" rx="8" fill="#fff7ed" stroke="#d97706" stroke-width="2"/>
+  <text x="462" y="273" class="pin">F1</text><text x="452" y="293" class="small">bezpiecznik</text>
+  <rect x="570" y="240" width="100" height="82" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="582" y="272" class="pin">DC-DC</text><text x="580" y="295" class="small">IN 12 V → 5 V</text>
+  <text x="440" y="360" class="small">OUT+ = 5 V • OUT− = GND</text>
+  <text x="440" y="382" class="small">Użyj wersji do instalacji automotive.</text>
+
+  <!-- ESP32 -->
+  <rect class="card" x="835" y="155" width="300" height="490" rx="16"/>
+  <text x="860" y="197" class="head">Waveshare ESP32-S3</text>
+  <text x="860" y="222" class="small">Touch AMOLED 1.64</text>
+  <rect x="875" y="255" width="220" height="345" rx="12" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <text x="905" y="295" class="pin">5V</text><text x="965" y="295" class="label">z przetwornicy</text>
+  <text x="905" y="350" class="pin">GND</text><text x="965" y="350" class="label">masa wspólna</text>
+  <text x="905" y="415" class="pin">3V3</text><text x="965" y="415" class="label">zasilanie transceivera</text>
+  <text x="905" y="490" class="pin">GPIO1</text><text x="965" y="490" class="label">TWAI TX</text>
+  <text x="905" y="545" class="pin">GPIO2</text><text x="965" y="545" class="label">TWAI RX</text>
+
+  <!-- transceiver -->
+  <rect class="card" x="1210" y="220" width="245" height="365" rx="16"/>
+  <text x="1232" y="260" class="head">SN65HVD230</text>
+  <text x="1232" y="285" class="small">moduł CAN 3,3 V</text>
+  <rect x="1240" y="315" width="185" height="230" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <text x="1260" y="350" class="pin">VCC</text><text x="1350" y="350" class="label">3V3</text>
+  <text x="1260" y="390" class="pin">GND</text><text x="1350" y="390" class="label">GND</text>
+  <text x="1260" y="435" class="pin">D / TXD</text><text x="1350" y="435" class="label">z GPIO1</text>
+  <text x="1260" y="475" class="pin">R / RXD</text><text x="1350" y="475" class="label">do GPIO2</text>
+  <text x="1260" y="515" class="pin">CANH/L</text><text x="1350" y="515" class="label">do OBD</text>
+
+  <!-- Wiring -->
+  <path class="power" d="M310 320 H445"/><path class="power" d="M540 277 H570"/><path class="power" d="M670 277 H755 V295 H875"/>
+  <path class="gnd" d="M310 385 H390 V340 H700 V350 H875"/><path class="gnd" d="M700 350 H1190 V390 H1240"/>
+  <path class="logic" d="M1095 415 H1165 V350 H1240"/><path class="logic" d="M1095 490 H1175 V435 H1240"/><path class="logic" d="M1095 545 H1185 V475 H1240"/>
+  <path class="canh" d="M1240 515 H1188 V650 H390 V450 H310"/>
+  <path class="canl" d="M1425 515 H1468 V690 H370 V515 H310"/>
+
+  <!-- Notes -->
+  <rect class="warn" x="410" y="455" width="290" height="190" rx="14"/>
+  <text x="433" y="490" class="head" fill="#9a3412">Uwaga — zasilanie</text>
+  <text x="433" y="523" class="warntext">• Pin 16 OBD może być stale aktywny.</text>
+  <text x="433" y="550" class="warntext">• Bezpiecznik blisko wtyczki.</text>
+  <text x="433" y="577" class="warntext">• Nie podawaj 12 V na ESP32 / CAN.</text>
+  <text x="433" y="604" class="warntext">• Nie łącz USB i zewn. 5 V bez weryfikacji.</text>
+
+  <rect class="warn" x="835" y="705" width="620" height="150" rx="14"/>
+  <text x="862" y="742" class="head" fill="#9a3412">Przed podłączeniem do auta</text>
+  <text x="862" y="775" class="warntext">1. Zmierz wyjście przetwornicy: 5,0 V; moduł SN65HVD230 zasilaj z 3V3.</text>
+  <text x="862" y="803" class="warntext">2. Nie dodawaj terminatora 120 Ω do portu OBD-II; CANH/CANL nie mogą być zwarte.</text>
+  <text x="862" y="831" class="warntext">3. Potwierdź GPIO1/2 na pinoucie swojej rewizji płytki przed lutowaniem.</text>
+
+  <line x1="55" y1="900" x2="1455" y2="900" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="55" y="932" class="foot">Kolory przewodów: pomarańczowy +5 V • szary GND • niebieski logika • zielony CANH • fioletowy CANL. Rysunek pokazuje funkcje pinów, nie fizyczną orientację złącza.</text>
+  <text x="55" y="956" class="foot">Źródła: Waveshare ESP32-S3-Touch-AMOLED-1.64; Waveshare SN65HVD230 CAN Board; TI SN65HVD230 datasheet; standardowy pinout OBD-II.</text>
+</svg>

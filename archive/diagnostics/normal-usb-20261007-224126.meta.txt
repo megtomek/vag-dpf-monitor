@@ -1,0 +1,8 @@
+﻿Started UTC: 2026-10-07T20:41:26.9398063Z
+Duration hours: 8
+Device: COM6
+Firmware factory SHA256: 74E35152E69E9E12D1C2D8D2DB209DECCA0D9B7BFED4E2D3D414C6C15CD2B221
+Firmware size bytes: 674288
+Stdout log: C:\Users\Administrator\Documents\ChatGPT\Samochodowy Monitor DPF\archive\diagnostics\normal-usb-20261007-224126.stdout.log
+Stderr log: C:\Users\Administrator\Documents\ChatGPT\Samochodowy Monitor DPF\archive\diagnostics\normal-usb-20261007-224126.stderr.log
+Mode: read-only ESPHome serial log capture; this script does not compile or flash firmware.

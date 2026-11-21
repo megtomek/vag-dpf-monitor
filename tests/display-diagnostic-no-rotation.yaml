@@ -1,0 +1,63 @@
+# Tymczasowy test panelu CO5300: bez LVGL, obrotu, Wi-Fi i CAN.
+# Nie używać jako firmware monitora samochodowego.
+esphome:
+  name: dpf-display-diagnostic
+  friendly_name: DPF Display Diagnostic
+
+esp32:
+  board: esp32-s3-devkitc1-n16r8
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  baud_rate: 115200
+  level: INFO
+
+# Taka sama magistrala Quad-SPI i piny jak w monitorze DPF.
+spi:
+  - id: display_spi
+    type: quad
+    clk_pin: GPIO10
+    data_pins: [GPIO11, GPIO12, GPIO13, GPIO14]
+
+globals:
+  - id: marker_x
+    type: int
+    initial_value: '0'
+
+# Natywna orientacja panelu (pionowa), bez LVGL i bez rotacji programowej.
+display:
+  - platform: mipi_spi
+    id: amoled
+    model: WAVESHARE-ESP32-S3-TOUCH-AMOLED-1.64
+    bus_mode: quad
+    spi_id: display_spi
+    cs_pin: GPIO9
+    reset_pin: GPIO21
+    brightness: 128
+    color_order: rgb
+    spi_mode: mode0
+    data_rate: 5MHz
+    auto_clear_enabled: false
+    update_interval: 2s
+    lambda: |-
+      const int w = it.get_width();
+      const int h = it.get_height();
+      it.fill(Color(8, 14, 24));
+
+      // Pasy kontrolne pomagają rozpoznać błędy transferu i kolejności RGB.
+      const int band_w = w / 5;
+      it.filled_rectangle(0 * band_w, 0, band_w, 48, Color(255, 0, 0));
+      it.filled_rectangle(1 * band_w, 0, band_w, 48, Color(0, 255, 0));
+      it.filled_rectangle(2 * band_w, 0, band_w, 48, Color(0, 0, 255));
+      it.filled_rectangle(3 * band_w, 0, band_w, 48, Color(255, 255, 255));
+      it.filled_rectangle(4 * band_w, 0, w - 4 * band_w, 48, Color(255, 180, 0));
+
+      // Ruchomy znacznik potwierdza, że pełny kadr nadal jest odświeżany.
+      it.filled_rectangle(id(marker_x), h - 36, 24, 24, Color(50, 214, 197));
+      id(marker_x) = (id(marker_x) + 24) % (w - 24);

@@ -1,0 +1,129 @@
+# Drugi etap diagnostyki CO5300: LVGL + ten sam programowy obrót 90° co UI.
+# Bez Wi-Fi, CAN i dotyku; nie używać jako firmware monitora samochodowego.
+esphome:
+  name: dpf-lvgl-rotation-test
+  friendly_name: DPF LVGL Rotation Test
+
+esp32:
+  board: esp32-s3-devkitc1-n16r8
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  baud_rate: 115200
+  level: INFO
+
+spi:
+  - id: display_spi
+    type: quad
+    clk_pin: GPIO10
+    data_pins: [GPIO11, GPIO12, GPIO13, GPIO14]
+
+display:
+  - platform: mipi_spi
+    id: amoled
+    model: WAVESHARE-ESP32-S3-TOUCH-AMOLED-1.64
+    bus_mode: quad
+    spi_id: display_spi
+    cs_pin: GPIO9
+    reset_pin: GPIO21
+    brightness: 128
+    color_order: rgb
+    spi_mode: mode0
+    data_rate: 5MHz
+    auto_clear_enabled: false
+    update_interval: never
+
+font:
+  - file:
+      type: local
+      path: ../fonts/Ubuntu-R.ttf
+    id: diag_font
+    size: 20
+    bpp: 4
+    glyphs: " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#-:"
+
+interval:
+  # Regular partial redraws exercise the LVGL flush and software-rotation path.
+  - interval: 2s
+    then:
+      - lvgl.label.update:
+          id: diag_counter
+          text: !lambda |-
+            static char text[40];
+            snprintf(text, sizeof(text), "LVGL ROT 90 / T=%lus", millis() / 1000);
+            return text;
+
+lvgl:
+  displays:
+    - amoled
+  buffer_size: 25%
+  rotation: 90
+  text_font: diag_font
+  text_color: 0xF2F5F8
+  bg_color: 0x0B1018
+  border_width: 0
+  pages:
+    - id: diagnostic_page
+      bg_color: 0x0B1018
+      widgets:
+        - label:
+            align: TOP_MID
+            x: 0
+            y: 24
+            width: 400
+            height: 36
+            text: "LVGL ROTATION TEST"
+            text_align: CENTER
+            text_color: 0xF2F5F8
+        - label:
+            align: TOP_LEFT
+            x: 24
+            y: 90
+            width: 64
+            height: 64
+            text: ""
+            bg_color: 0xFF3030
+            bg_opa: cover
+        - label:
+            align: TOP_LEFT
+            x: 104
+            y: 90
+            width: 64
+            height: 64
+            text: ""
+            bg_color: 0x30E050
+            bg_opa: cover
+        - label:
+            align: TOP_LEFT
+            x: 184
+            y: 90
+            width: 64
+            height: 64
+            text: ""
+            bg_color: 0x3060FF
+            bg_opa: cover
+        - label:
+            align: TOP_LEFT
+            x: 264
+            y: 90
+            width: 64
+            height: 64
+            text: ""
+            bg_color: 0xFFFFFF
+            bg_opa: cover
+        - label:
+            id: diag_counter
+            align: BOTTOM_MID
+            x: 0
+            y: -30
+            width: 300
+            height: 32
+            text: "LVGL ROT 90 / START"
+            text_align: CENTER
+            text_color: 0x32D6C5

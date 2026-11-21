@@ -1,0 +1,9 @@
+{
+  "artifact": "ESPHome Web Server v3 www.js",
+  "verified_date": "2026-11-21",
+  "url": "https://oi.esphome.io/v3/www.js",
+  "size_bytes": 77692,
+  "sha256": "7d94fdcfbbb0782db3c7cadd577855879df103f1b88f546771fca75a36c4ca0d",
+  "comparison": "full upstream artifact matches local base after line-ending normalization, one HTML less-than escape and one SVG whitespace replacement",
+  "source_commit": null
+}

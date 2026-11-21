@@ -1,0 +1,22 @@
+VAG DPF Monitor
+Copyright (C) 2026 megtomek
+
+SPDX-License-Identifier: GPL-3.0-only
+
+Unless a file or resource carries a different notice, the original project
+code and documentation in this revision are licensed under the GNU General
+Public License, version 3 only, as published by the Free Software Foundation.
+The full, unmodified license text is in LICENSE.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See LICENSE for the complete terms.
+
+Third-party code, fonts, frontend assets and other external resources retain
+their own copyright and license notices. This notice does not claim ownership
+of those resources or relicense them. See THIRD_PARTY_NOTICES.md for known
+licenses and outstanding provenance checks.
+
+Contributors retain copyright in their contributions. Original contributions
+submitted for inclusion are offered under GPL-3.0-only, as described in
+CONTRIBUTING.md. No copyright assignment is required.

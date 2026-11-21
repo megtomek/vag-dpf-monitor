@@ -1,0 +1,7 @@
+﻿id_próbki;monitor_data_godzina;OBD_data_godzina;odstęp_czasu_s;warunki;stan_silnika;OBD_RPM [rpm];monitor_RPM [rpm];OBD_temp_płynu [°C];monitor_temp_płynu [°C];OBD_sadza_obliczona [g];monitor_sadza_obliczona [g];OBD_sadza_zmierzona [g];monitor_sadza_zmierzona [g];OBD_cisnienie_DPF;jednostka_cisnienia;monitor_cisnienie_DPF [kPa];OBD_temp_wlot_DPF [°C];monitor_temp_wlot_DPF [°C];OBD_EGT1 [°C];monitor_EGT1 [°C];OBD_EGT3 [°C];monitor_EGT3 [°C];OBD_status_regeneracji_nazwa_dokładna;OBD_status_regeneracji_wartość;monitor_status_regeneracji;PID_0x8B_dane_A-G_hex;PID_A0_A1_obsługiwane;PID_B0_B1;alarm_NIE_GAŚ_zgodny;notatki
+1;;;;;Zapłon włączony, silnik wyłączony;;;;;;;;;;;;;;;;;;;;;;;;;
+2;;;;;Rozgrzany silnik, bieg jałowy, bez regeneracji;;;;;;;;;;;;;;;;;;;;;;;;;
+3;;;;;Normalna jazda, regeneracja nieaktywna;;;;;;;;;;;;;;;;;;;;;;;;;
+4;;;;;Obserwowana automatyczna regeneracja;;;;;;;;;;;;;;;;;;;;;;;;;
+5;;;;;Po zakończeniu automatycznej regeneracji;;;;;;;;;;;;;;;;;;;;;;;;;
+2;14:54:33;;;przejazd samochodem;silnik pracował podczas przejazdu;;;;;;19.04;;18.57;;hPa (kandydat);1.4;;146.3;;;;;;;nieodczytany;;;;;114F raw 07 70, 114E raw 07 41, 14F5 raw 00 0E, 1156 raw 00 03 A2 E9 = 238313 m (U32 kandydat), 11B2 raw 10 62 = 146.3°C, 10FB raw 0F 81 = 123.8°C. OBD 19 żądań, 10 ISO-TP, 10 timeoutów. RX 12-13/5s, strat RX 0. Wi-Fi reconnect loop.
