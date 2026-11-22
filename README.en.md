@@ -32,16 +32,18 @@ Two event snapshots are retained in NVS; approximately ten minutes of drive data
 
 Build locally: images include local credentials and must not be shared. A build is not physical/vehicle validation. Operate the screen and download data while parked.
 
+Browser icons may use external Iconify servers; see [icon dependencies](docs/WEB_PANEL_ICONS.md). Device monitoring does not depend on those servers.
+
 ## Contributing and status
 
 Polish and English reports are welcome. See [CONTRIBUTING](CONTRIBUTING.md), [SUPPORT](SUPPORT.md), [SECURITY](SECURITY.md) and [Issues](https://github.com/megtomek/vag-dpf-monitor/issues). Redact VINs, credentials, network identifiers and locations.
 
-[PROJECT_STATUS](PROJECT_STATUS.md), [RELEASES](RELEASES.md), [CHANGELOG](CHANGELOG.md) and [documentation index](docs/INDEX.md) track evidence. PR #17/#18 are development branches, not merged `main` features.
+[PROJECT_STATUS](PROJECT_STATUS.md), [RELEASES](RELEASES.md), [CHANGELOG](CHANGELOG.md) and [documentation index](docs/INDEX.md) track evidence. This repository starts from a reviewed source snapshot. Old PR numbers, tags and commit hashes in historical reports belong to the former repository and are not current releases or tasks. The touch-to-open HIST summary from former development work is not included in this source baseline. See [migration scope](docs/REPOSITORY_MIGRATION.md).
 
 ## Licensing
 
 Original project code and documentation are licensed under **GNU GPL version 3 only**, `SPDX-License-Identifier: GPL-3.0-only`. See the full [LICENSE](LICENSE) and scope in [COPYRIGHT](COPYRIGHT).
 
-Use, modification and commercial distribution are permitted under the license's conditions, including corresponding-source obligations when distributing covered firmware or derivatives. The project is supplied without warranty as specified in the license. Third-party assets retain their own licenses, including MIT for the upstream frontend, BSD-3-Clause for Lit and Ubuntu Font Licence for fonts; see [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md) for the remaining provenance review.
+Use, modification and commercial distribution are permitted under the license's conditions, including corresponding-source obligations when distributing covered firmware or derivatives. The project is supplied without warranty as specified in the license. Third-party assets retain their own licenses, including MIT for the upstream frontend, BSD-3-Clause for Lit and Ubuntu Font Licence for fonts and Apache-2.0/Pictogrammers notices for MDI icons; see [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md) for source provenance and notices.
 
 Independent community project; not affiliated with Volkswagen Group, Audi, Waveshare or OBDeleven.

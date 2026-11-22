@@ -21,7 +21,7 @@ Copy-Item secrets.example.yaml secrets.yaml
 notepad secrets.yaml
 ```
 
-Dopóki repozytorium jest prywatne, klonowanie wymaga dostępu. Uzupełnij SSID/hasło Wi-Fi, hasło AP (co najmniej 8 znaków), login/hasło WWW i hasło OTA. Użyj własnych wartości. Nie udostępniaj `secrets.yaml` ani BIN z lokalnymi hasłami.
+Uzupełnij SSID/hasło Wi-Fi, hasło AP (co najmniej 8 znaków), login/hasło WWW i hasło OTA. Użyj własnych wartości. Nie udostępniaj `secrets.yaml` ani BIN z lokalnymi hasłami.
 
 ## 2. Pierwsze przygotowanie ESP-IDF — bez flashowania
 

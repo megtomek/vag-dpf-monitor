@@ -1,5 +1,7 @@
 # Przegląd pochodzenia i danych historycznych — 21.11.2026
 
+> Dokument historyczny dotyczący poprzedniego repozytorium. Nie opisuje bieżącej gotowości nowej historii. Aktualny stan: [checklista publikacji](PUBLICATION_CHECKLIST.md) i [zakres przeniesienia](REPOSITORY_MIGRATION.md).
+
 ## Wynik
 
 **Przegląd wykonany; publikacja całego repozytorium z historią nadal wymaga decyzji i kilku działań.** Nie znaleziono sekretów wskazanych przez Gitleaks ani aktualnych lokalnych haseł w sprawdzonych materiałach. Potwierdzono pochodzenie CAN i fontów, dodano brakujące noty bibliotek panelu. Pozostają dokładna wersja bazy frontendu, pochodzenie lokalnego FT3168 sprzed Git oraz świadoma decyzja o metadanych autora i identyfikatorze urządzenia w archiwum. To przegląd techniczny, nie gwarancja braku ukrytych danych ani opinia prawna.

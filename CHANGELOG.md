@@ -77,3 +77,8 @@ Ograniczenia: alarm pozostaje szacowany, statusy ECU podczas pierwszego zdarzeni
 - Uzupełniono noty ikon MDI (Apache-2.0/Pictogrammers) i opisano zewnętrzne serwery ikon w panelu. Weryfikacja statyczna/metadanych, bez zmiany zachowania ani deklaracji pełnego trybu offline.
 
 - Poprawiono siedem odnośników w archiwalnym README wskazujących pliki sprzed przeniesienia do docs/history; bez zmiany historycznych opisów.
+
+## Przygotowanie publikacji — 22.11.2026
+
+- Zaktualizowano README PL/EN, stan, plan, wydania i checklistę do nowej historii repozytorium. Odnośniki do starych PR/Issues oznaczono jako archiwalne; stare opisy wydań zachowano w docs/history.
+- Dodano opis migracji i rozdzielono publikowane źródła od obrazu urządzenia. Bez zmiany firmware, progów, pinów i mapowań ECU.

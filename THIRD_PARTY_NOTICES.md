@@ -13,7 +13,7 @@ Stan: 21.11.2026. Własny kod i dokumentacja mają **GPL-3.0-only** — [LICENSE
 | Iconify | Zachowano [MIT](LICENSES/Iconify-MIT.txt). Nie ustalono wersji lokalnego fragmentu; nie badano zapytań runtime. Ikony MDI mają osobne noty Apache-2.0/Pictogrammers — [zakres](docs/WEB_PANEL_ICONS.md) |
 | Ubuntu-B.ttf / Ubuntu-R.ttf | Tożsame binarnie z oficjalną paczką Ubuntu 0.83. Canonical 2011 / Dalton Maag, Ubuntu Font Licence 1.0. [Źródło i hashe](fonts/PROVENANCE.md), [licencja](fonts/UFL.txt). Nie są relicencjonowane na GPL |
 | Schematy i PNG | Przejrzane makiety i diagramy, bez widocznych identyfikatorów pojazdu ani metadanych tekstowych PNG. To archiwalne wizualizacje, nie aktualne zdjęcia urządzenia; sam wygląd nie dowodzi autorstwa |
-| Source-bundle ZIP | Wycofany z bieżącej dystrybucji; lokalny oryginał i prywatna kopia zachowane. Dawne commity/tagi nadal zawierają paczkę bez kompletu not. [Stan archiwum](firmware/archive/README.md) |
+| Source-bundle ZIP | Wycofany z bieżącej dystrybucji; lokalny oryginał i prywatna kopia zachowane. Paczkę zawierała historia poprzedniego repozytorium; nie ma jej w nowej historii. [Stan archiwum](firmware/archive/README.md) |
 
 ## Zależności budowania
 
@@ -25,4 +25,4 @@ Przy dystrybucji firmware trzeba zachować wymagane noty i zapewnić źródła o
 
 Nie znaleziono dystrybuowanych baz ODX/ROD/PDX lub komercyjnych pakietów diagnostycznych w sprawdzonych ścieżkach. Źródła tropów DID są cytowane w raportach i oddzielane od własnych pomiarów. Referencja do identyfikatora ODX nie jest prawem do bazy. Właściciel powinien potwierdzić prawa do własnego wkładu sprzed pierwszego importu; Git sam tego nie rozstrzyga.
 
-Bazę panelu i powstanie integracji FT3168 potwierdzono opisanymi dowodami. Przed publikacją całej historii pozostają stare ZIP/tagi bez kompletu not i dane zachowane w referencjach PR; gałęzie/tagi już zanonimizowano. Wybór GPL własnej części jest zakończony.
+Bazę panelu i powstanie integracji FT3168 potwierdzono opisanymi dowodami. Poprzednie repozytorium usunięto, a nowa historia nie zawiera dawnych ZIP/tagów ani referencji PR. [Zakres przeniesienia](docs/REPOSITORY_MIGRATION.md). Wybór GPL własnej części jest zakończony.

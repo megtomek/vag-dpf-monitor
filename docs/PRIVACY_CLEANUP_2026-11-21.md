@@ -1,5 +1,7 @@
 # Oczyszczenie historii i gotowość publikacji — 21.11.2026
 
+> Dokument historyczny dotyczący poprzedniego repozytorium. Nie opisuje bieżącej gotowości nowej historii. Aktualny stan: [checklista publikacji](PUBLICATION_CHECKLIST.md) i [zakres przeniesienia](REPOSITORY_MIGRATION.md).
+
 ## Wynik: jeszcze nie udostępniać całego repozytorium
 
 Na wyraźne zlecenie właściciela przepisano historię istniejącego repozytorium. Prywatna kopia sprzed operacji pozostaje lokalnie poza publikowanymi źródłami. Nie zmieniono widoczności ani działania firmware.

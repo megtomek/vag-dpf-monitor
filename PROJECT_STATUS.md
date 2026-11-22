@@ -1,17 +1,17 @@
 # Bieżący stan projektu
 
-Aktualizacja dokumentacji: 21.11.2026; ostatnie opisane wdrożenie: 03.11.2026. Ten plik opisuje stan obecny; [poprzedni dziennik](docs/history/PROJECT_STATUS-before-cleanup-2026-10-28.md) jest archiwum. Prywatne repozytorium: [megtomek/vag-dpf-monitor](https://github.com/megtomek/vag-dpf-monitor).
+Aktualizacja dokumentacji: 22.11.2026; ostatnie opisane wdrożenie: 03.11.2026. Ten plik opisuje stan obecny; [poprzedni dziennik](docs/history/PROJECT_STATUS-before-cleanup-2026-10-28.md) jest archiwum. Repozytorium: [megtomek/vag-dpf-monitor](https://github.com/megtomek/vag-dpf-monitor).
 
 ## Źródła i rzeczywiste wdrożenie
 
 | Obszar | Stan |
 |---|---|
-| Ostatnia wersja funkcjonalna | **v0.1.3**, prerelease; bieżące main może zawierać późniejsze poprawki dokumentacji |
+| Ostatnia wersja funkcjonalna | Oczyszczona baza dawnego v0.1.3; nowe repozytorium nie ma jeszcze własnych tagów/wydań |
 | Ostatni udokumentowany firmware urządzenia | NORMAL V1, CAN/OBD, v0.1.3 + draft PR #17/#18, źródła ac1923b, OTA 03.11.2026; nie jest to bieżący main |
 | Identyfikacja obrazu z 03.11 | OTA 1310768 B; SHA256 291471e20594df2db014301092c38241c6d8fa7c998c9666b70c6b630242c01a |
-| Dowody | [PR #18 i raport w jego gałęzi](https://github.com/megtomek/vag-dpf-monitor/pull/18), [wcześniejszy rejestrator](docs/REGEN_EVIDENCE_2026-10-28.md) |
+| Dowody | Dawny PR #18 — zachowany w prywatnym backupie, niedostępny jako PR obecnego repozytorium, [wcześniejszy rejestrator](docs/REGEN_EVIDENCE_2026-10-28.md) |
 | Obserwacja | 03.11 WWW odtworzyło zapis nr 4; CSV po OTA identyczny; krótki log CAN bez błędów. Ocena nowej strony HIST odłożona. Brak bieżącej obserwacji sprzętu 21.11 |
-| Źródła rozwojowe | Draft #17 (opcjonalne sensory) i #18 (podsumowanie) pozostają niescalone; stan sprawdzony w GitHub 21.11 |
+| Źródła rozwojowe | Rozszerzenia dawnych PR #17/#18 są w prywatnym backupie i nie należą do obecnego main |
 
 Urządzenie: Waveshare ESP32-S3-Touch-AMOLED-1.64, ekran poziomy 456×280. PCB V1 to założenie robocze; ESP32-S3 v0.2 oznacza rewizję krzemu. ECU: CJCD, SW 03L906018SJ/9977, HW 03L906018JL/H25, ODX EV_ECM20TDI01103L906018SJ/003003.
 
@@ -34,18 +34,18 @@ Drugie zdarzenie otrzymane 29.10: EGT3 maks. 642,5°C; sadza 21,03 → 6,96 g i 
 
 Zestaw otrzymany 02.11: zamknięte zdarzenie nr 4, 180 pełnych próbek, EGT3 maks. 649,8°C, sadza 21,06 → 5,06 g i 21,45 → 0,96 g. Alarm 9 min 41,600 s; reset dystansu 232,699 → 0 km przy jeszcze gorącym EGT3. Użytkownik potwierdził pobranie po fizycznym odłączeniu zasilania — naturalny rozszerzony zapis przetrwał. Cztery statusy nadal zerowe. [Raport](docs/COMPLETED_EVENT_2026-11-02.md).
 
-Przygotowanie publikacji: [checklista](docs/PUBLICATION_CHECKLIST.md). Repozytorium nadal prywatne, licencja własnego kodu i dokumentacji: GPL-3.0-only, wybrana przez właściciela 21.11.2026. [Przegląd pochodzenia i historii](docs/PROVENANCE_REVIEW_2026-11-21.md): brak znalezisk sekretów w opisanym zakresie; pozostają źródła bazy panelu/FT3168, noty ZIP i decyzja o metadanych autora/urządzenia. Obecna zmiana obejmuje dokumentację i komentarz licencyjny JS, bez zmiany zachowania firmware.
+Przygotowanie publikacji: [bieżąca checklista](docs/PUBLICATION_CHECKLIST.md), [zakres przeniesienia](docs/REPOSITORY_MIGRATION.md). Dawne raporty audytu opisują poprzednią historię, której nie ma w tym repozytorium.
 
 ## Następne działania
 
-| Praca | Co jest potrzebne | Zadanie |
+| Praca | Co jest potrzebne | Numer w poprzednim repozytorium |
 |---|---|---|
-| Pełne okno trendu | Potwierdzone na danych drugiego zdarzenia; pozostaje ocena luk i zwykłej jazdy | [#1](https://github.com/megtomek/vag-dpf-monitor/issues/1) |
-| Końcowy zapis i trwałość | Potwierdzone reason=2 i odczyt po odłączeniu zasilania; nadal nie sprawdzono zaniku podczas zapisu | [#1](https://github.com/megtomek/vag-dpf-monitor/issues/1) |
-| Fałszywe alarmy / pominięcia | Zwykłe przejazdy, także przy większym obciążeniu; bez zmiany progów po pojedynczym przypadku | [#1](https://github.com/megtomek/vag-dpf-monitor/issues/1) |
-| Rzeczywisty status ECU | Opis zgodny z ECU albo przechwycenie konkretnego kanału i zmian stanów; bez losowego skanowania DID | [#2](https://github.com/megtomek/vag-dpf-monitor/issues/2) |
-| Instalacja i dłuższa praca | Dokumentacja zasilania, zachowania przy rozruchu i utracie komunikacji | [#4](https://github.com/megtomek/vag-dpf-monitor/issues/4) |
-| Dalsze porównania parametrów | Dystans w ruchu, ciśnienie/sadza w różnych warunkach; patrz plan | [#13](https://github.com/megtomek/vag-dpf-monitor/issues/13) |
+| Pełne okno trendu | Potwierdzone na danych drugiego zdarzenia; pozostaje ocena luk i zwykłej jazdy | #1 (archiwalny numer z poprzedniego repozytorium) |
+| Końcowy zapis i trwałość | Potwierdzone reason=2 i odczyt po odłączeniu zasilania; nadal nie sprawdzono zaniku podczas zapisu | #1 (archiwalny numer z poprzedniego repozytorium) |
+| Fałszywe alarmy / pominięcia | Zwykłe przejazdy, także przy większym obciążeniu; bez zmiany progów po pojedynczym przypadku | #1 (archiwalny numer z poprzedniego repozytorium) |
+| Rzeczywisty status ECU | Opis zgodny z ECU albo przechwycenie konkretnego kanału i zmian stanów; bez losowego skanowania DID | #2 (archiwalny numer z poprzedniego repozytorium) |
+| Instalacja i dłuższa praca | Dokumentacja zasilania, zachowania przy rozruchu i utracie komunikacji | #4 (archiwalny numer z poprzedniego repozytorium) |
+| Dalsze porównania parametrów | Dystans w ruchu, ciśnienie/sadza w różnych warunkach; patrz plan | #13 (archiwalny numer z poprzedniego repozytorium) |
 
 Nie wywołujemy regeneracji serwisowej dla zebrania danych. Nie zmieniamy progów/pinów na podstawie ogólnego opisu z sieci. Cel całego projektu pozostaje otwarty.
 
