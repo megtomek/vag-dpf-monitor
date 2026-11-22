@@ -2,6 +2,9 @@
 
 ## Korzystanie i rozwój
 
+- [Zakres nowego repozytorium i historia przeniesienia](REPOSITORY_MIGRATION.md)
+- [Bieżąca checklista publikacji](PUBLICATION_CHECKLIST.md)
+
 - [Przegląd pochodzenia i danych historycznych](PROVENANCE_REVIEW_2026-11-21.md)
 - [Noty licencyjne zależności](../LICENSES/README.md)
 

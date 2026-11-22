@@ -32,7 +32,7 @@ DEMO jest symulacją. Schłodzenie filtra, spadek sadzy i reset dystansu są obs
 ## Pierwsze uruchomienie
 
 1. Sprawdź zgodność i [połączenia sprzętu](HARDWARE_REFERENCE.md). Potrzebujesz transceivera CAN i odpowiedniego samochodowego zasilania 5 V; nie podawaj 12 V na płytkę/GPIO.
-2. Pobierz źródła wybranego tagu lub `main`. Skopiuj `secrets.example.yaml` do `secrets.yaml` i wpisz własne dane. Nie publikuj tego pliku ani obrazu z hasłami.
+2. Pobierz źródła z `main` (lub opublikowanego tagu, gdy wydania będą dostępne). Skopiuj `secrets.example.yaml` do `secrets.yaml` i wpisz własne dane. Nie publikuj tego pliku ani obrazu z hasłami.
 3. Przygotuj środowisko i wgraj przez USB według [instrukcji instalacji](BUILD_INSTRUCTIONS.md). Aktywna konfiguracja to `audi-dpf-monitor.yaml`.
 4. Na postoju wybierz profil zgodny z ECU/CALID. Do auta podłączaj poprawnie okablowany monitor z firmware NORMAL.
 5. Wykonaj [odbiór urządzenia](docs/USER_GUIDE.md#odbiór-po-pierwszym-uruchomieniu) i porównaj dane z narzędziem diagnostycznym.
@@ -53,7 +53,9 @@ Nie udostępniamy uniwersalnego BIN. Obrazy kompilowane lokalnie zawierają sekr
 | Licencje i publikacja | [Pochodzenie zasobów](THIRD_PARTY_NOTICES.md), [checklista](docs/PUBLICATION_CHECKLIST.md) |
 | Cała dokumentacja | [Indeks](docs/INDEX.md) |
 
-`archive/`, `tests/` i `docs/history/` zachowują wcześniejsze eksperymenty. Nie są instrukcją aktualnego firmware. PR #17 i #18 pozostają osobnymi gałęziami rozwojowymi; podsumowanie po dotknięciu HIST z PR #18 nie jest jeszcze funkcją `main`.
+`archive/`, `tests/` i `docs/history/` zachowują wcześniejsze eksperymenty. Nie są instrukcją aktualnego firmware. Bieżące repozytorium zaczyna się od oczyszczonej kopii źródeł. Dawne numery PR, tagi i hashe w raportach odnoszą się do poprzedniego repozytorium; nie są aktywnymi zadaniami ani wydaniami tutaj. Podsumowanie otwierane dotknięciem HIST nie jest częścią tej bazy. [Zakres przeniesienia](docs/REPOSITORY_MIGRATION.md).
+
+Panel może pobierać ikony z internetu; [zależności ikon](docs/WEB_PANEL_ICONS.md). Odczyty i ekran urządzenia nie wymagają dostępu do tych serwerów.
 
 ## Jak pomóc
 
@@ -63,6 +65,6 @@ Przydatne są odtwarzalne zgłoszenia, porównania z dokładną identyfikacją E
 
 Własny kod i dokumentacja projektu są udostępniane na **GNU GPLv3, wyłącznie wersja 3** — `SPDX-License-Identifier: GPL-3.0-only`. Pełny tekst: [LICENSE](LICENSE); zakres i informacja o prawach: [COPYRIGHT](COPYRIGHT).
 
-Licencja pozwala używać, modyfikować i sprzedawać projekt. Rozpowszechnianie objętego nią firmware i wersji pochodnych wymaga spełnienia GPLv3, w tym udostępnienia odpowiednich źródeł. Projekt jest dostarczany bez gwarancji w zakresie określonym licencją. Zasoby zewnętrzne zachowują własne warunki, w tym MIT upstream panelu, BSD-3-Clause bibliotek Lit i Ubuntu Font Licence fontów. [Pochodzenie i pozostały przegląd](THIRD_PARTY_NOTICES.md).
+Licencja pozwala używać, modyfikować i sprzedawać projekt. Rozpowszechnianie objętego nią firmware i wersji pochodnych wymaga spełnienia GPLv3, w tym udostępnienia odpowiednich źródeł. Projekt jest dostarczany bez gwarancji w zakresie określonym licencją. Zasoby zewnętrzne zachowują własne warunki, w tym MIT upstream panelu, BSD-3-Clause bibliotek Lit i Ubuntu Font Licence fontów oraz Apache-2.0/Pictogrammers ikon MDI. [Pochodzenie i noty licencyjne](THIRD_PARTY_NOTICES.md).
 
 Niezależny projekt społecznościowy, niepowiązany z Volkswagen Group, Audi, Waveshare ani OBDeleven. Nazwy produktów służą identyfikacji zgodności.
